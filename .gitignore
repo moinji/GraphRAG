@@ -29,3 +29,7 @@ Thumbs.db
 
 # Large binaries
 *.pdf
+
+# Node.js / Frontend
+node_modules/
+dist/

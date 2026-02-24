@@ -102,6 +102,32 @@ class OntologyGenerateResponse(BaseModel):
     stage: str = "fk_only"
 
 
+# ── Ontology Version API ──────────────────────────────────────────
+
+class OntologyVersionResponse(BaseModel):
+    version_id: int
+    erd_hash: str
+    ontology: OntologySpec
+    eval_report: EvalMetrics | None = None
+    status: str = "draft"
+    created_at: str | None = None
+
+
+class OntologyUpdateRequest(BaseModel):
+    ontology: OntologySpec
+
+
+class OntologyUpdateResponse(BaseModel):
+    version_id: int
+    status: str
+    updated: bool
+
+
+class OntologyApproveResponse(BaseModel):
+    version_id: int
+    status: str
+
+
 # ── Query Result ───────────────────────────────────────────────────
 
 class QueryResult(BaseModel):

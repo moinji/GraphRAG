@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS ontology_versions (
     erd_hash    VARCHAR(64) NOT NULL,
     ontology_json JSONB NOT NULL,
     eval_json   JSONB,
+    status      VARCHAR(20) DEFAULT 'draft' NOT NULL,
     created_at  TIMESTAMP DEFAULT NOW()
 );
 """
@@ -102,3 +103,55 @@ def get_version(version_id: int) -> dict[str, Any] | None:
     except Exception:
         logger.warning("Failed to get ontology version", exc_info=True)
         return None
+
+
+def update_version(
+    version_id: int,
+    ontology_json: dict[str, Any],
+    eval_json: dict[str, Any] | None = None,
+) -> bool:
+    """Update ontology and eval for a draft version. Returns True on success."""
+    try:
+        conn = _get_conn()
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE ontology_versions
+                    SET ontology_json = %s, eval_json = %s
+                    WHERE id = %s AND status = 'draft'
+                    """,
+                    (
+                        json.dumps(ontology_json),
+                        json.dumps(eval_json) if eval_json else None,
+                        version_id,
+                    ),
+                )
+                updated = cur.rowcount > 0
+        conn.close()
+        return updated
+    except Exception:
+        logger.warning("Failed to update ontology version", exc_info=True)
+        return False
+
+
+def approve_version(version_id: int) -> bool:
+    """Set version status to 'approved'. Returns True on success."""
+    try:
+        conn = _get_conn()
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE ontology_versions
+                    SET status = 'approved'
+                    WHERE id = %s AND status = 'draft'
+                    """,
+                    (version_id,),
+                )
+                updated = cur.rowcount > 0
+        conn.close()
+        return updated
+    except Exception:
+        logger.warning("Failed to approve ontology version", exc_info=True)
+        return False

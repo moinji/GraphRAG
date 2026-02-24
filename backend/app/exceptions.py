@@ -46,6 +46,23 @@ class DatabaseError(Exception):
         super().__init__(detail)
 
 
+class VersionNotFoundError(Exception):
+    """Raised when an ontology version is not found."""
+
+    def __init__(self, version_id: int):
+        self.detail = f"Version {version_id} not found"
+        self.version_id = version_id
+        super().__init__(self.detail)
+
+
+class VersionConflictError(Exception):
+    """Raised when modifying an already-approved version."""
+
+    def __init__(self, detail: str = "Version conflict"):
+        self.detail = detail
+        super().__init__(detail)
+
+
 async def ddl_parse_error_handler(_request: Request, exc: DDLParseError) -> JSONResponse:
     return JSONResponse(status_code=422, content={"detail": exc.detail})
 
@@ -68,3 +85,15 @@ async def llm_enrichment_error_handler(
 
 async def database_error_handler(_request: Request, exc: DatabaseError) -> JSONResponse:
     return JSONResponse(status_code=500, content={"detail": exc.detail})
+
+
+async def version_not_found_handler(
+    _request: Request, exc: VersionNotFoundError
+) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": exc.detail})
+
+
+async def version_conflict_handler(
+    _request: Request, exc: VersionConflictError
+) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"detail": exc.detail})
