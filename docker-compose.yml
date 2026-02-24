@@ -1,0 +1,49 @@
+services:
+  neo4j:
+    image: neo4j:5-community
+    container_name: graphrag-neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_AUTH: neo4j/password123
+      NEO4J_PLUGINS: '[]'
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "password123", "RETURN 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: graphrag-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: graphrag
+      POSTGRES_PASSWORD: graphrag123
+      POSTGRES_DB: graphrag_meta
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U graphrag -d graphrag_meta"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: graphrag-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  neo4j_data:
+  postgres_data:
