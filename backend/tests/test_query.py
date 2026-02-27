@@ -1,0 +1,316 @@
+"""Query pipeline tests — 19 cases."""
+
+from __future__ import annotations
+
+from unittest.mock import MagicMock, patch
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+from app.main import create_app
+
+
+# ── Fixtures ──────────────────────────────────────────────────────
+
+@pytest.fixture
+def _app():
+    return create_app()
+
+
+@pytest.fixture
+async def api_client(_app):
+    transport = ASGITransport(app=_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
+
+
+# ════════════════════════════════════════════════════════════════════
+#  Template Registry
+# ════════════════════════════════════════════════════════════════════
+
+
+def test_registry_has_13_templates():
+    """#1: Registry contains exactly 13 templates."""
+    from app.query.template_registry import REGISTRY
+
+    assert len(REGISTRY) == 13
+
+
+def test_render_two_hop():
+    """#2: Slot filling produces valid Cypher for two_hop."""
+    from app.query.template_registry import render_cypher
+
+    cypher = render_cypher("two_hop", {
+        "start_label": "Customer",
+        "start_prop": "name",
+        "rel1": "PLACED",
+        "mid_label": "Order",
+        "rel2": "CONTAINS",
+        "end_label": "Product",
+        "return_prop": "name",
+    })
+    assert "Customer" in cypher
+    assert ":PLACED" in cypher
+    assert ":CONTAINS" in cypher
+    assert "$val" in cypher
+
+
+def test_render_agg_with_rel():
+    """#3: Slot filling produces valid Cypher for agg_with_rel."""
+    from app.query.template_registry import render_cypher
+
+    cypher = render_cypher("agg_with_rel", {
+        "start_label": "Order",
+        "rel1": "CONTAINS",
+        "mid_label": "Product",
+        "rel2": "BELONGS_TO",
+        "end_label": "Category",
+        "group_prop": "name",
+    })
+    assert "Order" in cypher
+    assert "count(DISTINCT a)" in cypher
+    assert "$limit" in cypher
+
+
+# ════════════════════════════════════════════════════════════════════
+#  Slot Validation
+# ════════════════════════════════════════════════════════════════════
+
+
+def test_slot_validation_rejects_injection():
+    """#4: Node label with special characters is rejected."""
+    from app.exceptions import QueryRoutingError
+    from app.query.slot_filler import fill_template
+
+    with pytest.raises(QueryRoutingError, match="Invalid node label"):
+        fill_template("two_hop", {
+            "start_label": "Customer; DROP",
+            "start_prop": "name",
+            "rel1": "PLACED",
+            "mid_label": "Order",
+            "rel2": "CONTAINS",
+            "end_label": "Product",
+            "return_prop": "name",
+        }, {"val": "test"})
+
+
+# ════════════════════════════════════════════════════════════════════
+#  Rule Router
+# ════════════════════════════════════════════════════════════════════
+
+
+def test_rules_match_top_n():
+    """#5: Aggregation pattern 'Top 3 카테고리' matches."""
+    from app.query.router_rules import classify_by_rules
+
+    result = classify_by_rules("가장 많이 팔린 카테고리 Top 3는?")
+    assert result is not None
+    tid, route, slots, params = result
+    assert tid == "agg_with_rel"
+    assert route == "cypher_agg"
+    assert params["limit"] == 3
+
+
+def test_rules_match_average():
+    """#6: Aggregation keyword '평균' detected in AGG_KEYWORDS."""
+    from app.query.router_rules import AGG_KEYWORDS
+
+    assert AGG_KEYWORDS.search("평균 금액은?") is not None
+
+
+def test_rules_match_q1_pattern():
+    """#7: '김민수가 주문한 상품' matches Q1 (two_hop)."""
+    from app.query.router_rules import classify_by_rules
+
+    result = classify_by_rules("고객 김민수가 주문한 상품은?")
+    assert result is not None
+    tid, route, slots, params = result
+    assert tid == "two_hop"
+    assert route == "cypher_traverse"
+    assert params["val"] == "김민수"
+
+
+def test_rules_no_match():
+    """#8: Unrelated question returns None."""
+    from app.query.router_rules import classify_by_rules
+
+    result = classify_by_rules("오늘 날씨가 어때?")
+    assert result is None
+
+
+# ════════════════════════════════════════════════════════════════════
+#  Hybrid Router
+# ════════════════════════════════════════════════════════════════════
+
+
+def test_hybrid_rules_priority():
+    """#9: When rules match, LLM is never called."""
+    with patch("app.query.router.classify_by_llm") as mock_llm:
+        from app.query.router import route_question
+
+        tid, route, slots, params, matched_by = route_question("고객 김민수가 주문한 상품은?")
+        assert matched_by == "rule"
+        assert tid == "two_hop"
+        mock_llm.assert_not_called()
+
+
+def test_hybrid_llm_fallback():
+    """#10: When rules don't match + API key present → LLM called."""
+    mock_result = (
+        "one_hop_out",
+        "cypher_traverse",
+        {"start_label": "Customer", "start_prop": "name", "rel1": "LIVES_AT", "end_label": "Address", "return_prop": "city"},
+        {"val": "김민수"},
+    )
+    with (
+        patch("app.query.router.settings") as mock_settings,
+        patch("app.query.router.classify_by_llm", return_value=mock_result) as mock_llm,
+    ):
+        mock_settings.anthropic_api_key = "test-key"
+        from app.query.router import route_question
+
+        tid, route, slots, params, matched_by = route_question("김민수의 주소는 어디야?")
+        assert matched_by == "llm"
+        assert tid == "one_hop_out"
+        mock_llm.assert_called_once()
+
+
+def test_hybrid_no_key_unsupported():
+    """#11: No API key + rules miss → unsupported."""
+    with patch("app.query.router.settings") as mock_settings:
+        mock_settings.anthropic_api_key = None
+        from app.query.router import route_question
+
+        tid, route, slots, params, matched_by = route_question("반품 정책은?")
+        assert route == "unsupported"
+        assert matched_by == "none"
+
+
+# ════════════════════════════════════════════════════════════════════
+#  Query API
+# ════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.anyio
+async def test_query_api_success(api_client: AsyncClient):
+    """#12: POST /query with rule-matched question → 200 + answer (non-cached)."""
+    mock_records = [{"result": "맥북프로"}, {"result": "에어팟프로"}]
+    with patch("app.query.pipeline._execute_cypher", return_value=mock_records):
+        # Use a question that is NOT in the demo cache
+        resp = await api_client.post(
+            "/api/v1/query",
+            json={"question": "고객 이영희가 주문한 상품은?"},
+        )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["matched_by"] == "rule"
+    assert data["template_id"] == "two_hop"
+    assert "맥북프로" in data["answer"]
+    assert data["cypher"] != ""
+    assert data["error"] is None
+
+
+@pytest.mark.anyio
+async def test_query_api_unsupported(api_client: AsyncClient):
+    """#13: Unsupported question → 200 + error field."""
+    with patch("app.query.router.settings") as mock_settings:
+        mock_settings.anthropic_api_key = None
+        resp = await api_client.post(
+            "/api/v1/query",
+            json={"question": "반품 정책은?"},
+        )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["route"] == "unsupported"
+    assert data["error"] is not None
+    assert data["cypher"] == ""
+
+
+@pytest.mark.anyio
+async def test_query_api_neo4j_failure(api_client: AsyncClient):
+    """#14: Neo4j failure → 502 (non-cached question)."""
+    from app.exceptions import CypherExecutionError
+
+    with patch(
+        "app.query.pipeline._execute_cypher",
+        side_effect=CypherExecutionError("Connection refused"),
+    ):
+        # Use a question that is NOT in the demo cache
+        resp = await api_client.post(
+            "/api/v1/query",
+            json={"question": "고객 이영희가 주문한 상품은?"},
+        )
+    assert resp.status_code == 502
+    assert "Connection refused" in resp.json()["detail"]
+
+
+@pytest.mark.anyio
+async def test_pipeline_paths_included(api_client: AsyncClient):
+    """#15: Response includes evidence paths (non-cached question)."""
+    mock_records = [{"result": "맥북프로"}, {"result": "갤럭시탭"}]
+    with patch("app.query.pipeline._execute_cypher", return_value=mock_records):
+        # Use a question that is NOT in the demo cache
+        resp = await api_client.post(
+            "/api/v1/query",
+            json={"question": "고객 이영희가 주문한 상품은?"},
+        )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["paths"]) == 2
+    assert "Customer(이영희)" in data["paths"][0]
+    assert "Product(맥북프로)" in data["paths"][0]
+
+
+# ════════════════════════════════════════════════════════════════════
+#  Q4 Rule Router
+# ════════════════════════════════════════════════════════════════════
+
+
+def test_rules_match_q4_pattern():
+    """#16: '김민수와 이영희가 공통으로 구매한 상품' matches Q4."""
+    from app.query.router_rules import classify_by_rules
+
+    result = classify_by_rules("김민수와 이영희가 공통으로 구매한 상품은?")
+    assert result is not None
+    tid, route, slots, params = result
+    assert tid == "custom_q4"
+    assert route == "cypher_traverse"
+    assert params["name1"] == "김민수"
+    assert params["name2"] == "이영희"
+
+
+def test_rules_match_q4_reversed_names():
+    """#17: Q4 pattern with reversed names."""
+    from app.query.router_rules import classify_by_rules
+
+    result = classify_by_rules("이영희과 김민수가 공통 구매한 상품은?")
+    assert result is not None
+    tid, route, slots, params = result
+    assert tid == "custom_q4"
+    assert params["name1"] == "이영희"
+    assert params["name2"] == "김민수"
+
+
+# ════════════════════════════════════════════════════════════════════
+#  Demo Cache
+# ════════════════════════════════════════════════════════════════════
+
+
+def test_cache_hit():
+    """#18: Known demo question returns cached response."""
+    from app.query.demo_cache import get_cached_answer
+
+    resp = get_cached_answer("고객 김민수가 주문한 상품은?")
+    assert resp is not None
+    assert resp.cached is True
+    assert "맥북프로" in resp.answer
+    assert resp.template_id == "two_hop"
+    assert resp.matched_by == "rule"
+
+
+def test_cache_miss():
+    """#19: Unknown question returns None."""
+    from app.query.demo_cache import get_cached_answer
+
+    resp = get_cached_answer("오늘 날씨가 어때?")
+    assert resp is None

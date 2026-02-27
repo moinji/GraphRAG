@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,10 +10,12 @@ import RelationshipTable from '@/components/RelationshipTable';
 import DiffPanel from '@/components/DiffPanel';
 import EditNodeDialog from '@/components/EditNodeDialog';
 import EditRelationshipDialog from '@/components/EditRelationshipDialog';
-import { updateVersion, approveVersion } from '@/api/client';
+import { updateVersion, approveVersion, startKGBuild, getKGBuildStatus, uploadCSVFiles } from '@/api/client';
 import type {
+  CSVTableSummary,
   ERDSchema,
   EvalMetrics,
+  KGBuildResponse,
   NodeType,
   OntologyGenerateResponse,
   OntologySpec,
@@ -23,9 +25,10 @@ import type {
 interface ReviewPageProps {
   result: OntologyGenerateResponse;
   erd: ERDSchema;
+  onGoToQuery?: () => void;
 }
 
-export default function ReviewPage({ result, erd: _erd }: ReviewPageProps) {
+export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps) {
   const [mode, setMode] = useState<'auto' | 'review'>('review');
   const [ontology, setOntology] = useState<OntologySpec>(result.ontology);
   const [evalMetrics] = useState<EvalMetrics | null>(result.eval_report);
@@ -39,6 +42,17 @@ export default function ReviewPage({ result, erd: _erd }: ReviewPageProps) {
   const [showAddNode, setShowAddNode] = useState(false);
   const [editRelIdx, setEditRelIdx] = useState<number | null>(null);
   const [showAddRel, setShowAddRel] = useState(false);
+
+  // KG Build state
+  const [buildJob, setBuildJob] = useState<KGBuildResponse | null>(null);
+  const [buildLoading, setBuildLoading] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // CSV Import state
+  const [csvSessionId, setCsvSessionId] = useState<string | null>(null);
+  const [csvTables, setCsvTables] = useState<CSVTableSummary[]>([]);
+  const [csvUploading, setCsvUploading] = useState(false);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   const locked = status === 'approved';
   const versionId = result.version_id;
@@ -150,6 +164,79 @@ export default function ReviewPage({ result, erd: _erd }: ReviewPageProps) {
     });
   }
 
+  // ── CSV Upload ────────────────────────────────────────────────────
+
+  async function handleCSVUpload(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+    setCsvUploading(true);
+    setCsvTables([]);
+    setCsvSessionId(null);
+    try {
+      const files = Array.from(fileList);
+      const resp = await uploadCSVFiles(files, erd);
+      setCsvSessionId(resp.csv_session_id);
+      setCsvTables(resp.tables);
+      showSuccess(`CSV uploaded: ${resp.tables.length} table(s) validated`);
+    } catch (e) {
+      showError(e instanceof Error ? e.message : 'CSV upload failed');
+    } finally {
+      setCsvUploading(false);
+      if (csvInputRef.current) csvInputRef.current.value = '';
+    }
+  }
+
+  // ── KG Build ────────────────────────────────────────────────────
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => stopPolling();
+  }, [stopPolling]);
+
+  async function handleBuildKG() {
+    if (!versionId) {
+      showError('No version ID available');
+      return;
+    }
+    setBuildLoading(true);
+    try {
+      const job = await startKGBuild(versionId, erd, csvSessionId ?? undefined);
+      setBuildJob(job);
+
+      // Start polling every 2 seconds
+      pollRef.current = setInterval(async () => {
+        try {
+          const updated = await getKGBuildStatus(job.build_job_id);
+          setBuildJob(updated);
+          if (updated.status === 'succeeded' || updated.status === 'failed') {
+            stopPolling();
+            setBuildLoading(false);
+            if (updated.status === 'succeeded') {
+              showSuccess(
+                `KG built: ${updated.progress?.nodes_created ?? 0} nodes, ${updated.progress?.relationships_created ?? 0} relationships (${updated.progress?.duration_seconds ?? 0}s)`,
+              );
+            } else if (updated.error) {
+              showError(`Build failed at ${updated.error.stage}: ${updated.error.message}`);
+            }
+          }
+        } catch {
+          stopPolling();
+          setBuildLoading(false);
+        }
+      }, 2000);
+    } catch (e) {
+      showError(e instanceof Error ? e.message : 'Build KG failed');
+      setBuildLoading(false);
+    }
+  }
+
+  const buildDisabled = status !== 'approved' || buildLoading || !versionId;
+
   // ── Render ──────────────────────────────────────────────────────
 
   return (
@@ -207,10 +294,73 @@ export default function ReviewPage({ result, erd: _erd }: ReviewPageProps) {
               <Button onClick={handleApprove} disabled={locked || loading}>
                 {locked ? 'Approved' : loading ? 'Approving...' : 'Auto Approve'}
               </Button>
-              <Button variant="outline" disabled>
-                Build KG (Week 4)
+              <Button
+                variant="outline"
+                onClick={handleBuildKG}
+                disabled={buildDisabled}
+              >
+                {buildLoading ? 'Building...' : csvSessionId ? 'Build KG (CSV)' : 'Build KG'}
               </Button>
+              {buildJob?.status === 'succeeded' && onGoToQuery && (
+                <Button onClick={onGoToQuery}>
+                  Q&A
+                </Button>
+              )}
             </div>
+            {locked && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">CSV Data (optional)</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={csvInputRef}
+                    type="file"
+                    multiple
+                    accept=".csv"
+                    onChange={(e) => handleCSVUpload(e.target.files)}
+                    disabled={csvUploading}
+                    className="text-sm file:mr-2 file:rounded file:border-0 file:bg-primary file:px-3 file:py-1 file:text-sm file:text-primary-foreground hover:file:bg-primary/90"
+                  />
+                  {csvUploading && <span className="text-sm text-muted-foreground animate-pulse">Validating...</span>}
+                </div>
+                {csvTables.length > 0 && (
+                  <div className="space-y-1">
+                    {csvTables.map((t) => (
+                      <div key={t.table_name} className="flex items-center gap-2 text-sm">
+                        <Badge variant="default" className="bg-green-600">{t.table_name}</Badge>
+                        <span>{t.row_count} rows</span>
+                        <span className="text-muted-foreground">({t.columns.join(', ')})</span>
+                        {t.warnings.map((w, i) => (
+                          <span key={i} className="text-yellow-600 text-xs">{w}</span>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {!csvSessionId && csvTables.length === 0 && !csvUploading && (
+                  <p className="text-xs text-muted-foreground">No CSV uploaded — will use sample data</p>
+                )}
+              </div>
+            )}
+            {buildJob && (
+              <div className="mt-3 rounded-lg border p-3 text-sm">
+                <p className="font-medium">
+                  Build: <span className="capitalize">{buildJob.status}</span>
+                </p>
+                {(buildJob.status === 'queued' || buildJob.status === 'running') && (
+                  <p className="text-muted-foreground animate-pulse">Processing...</p>
+                )}
+                {buildJob.status === 'succeeded' && buildJob.progress && (
+                  <p className="text-green-700">
+                    {buildJob.progress.nodes_created} nodes, {buildJob.progress.relationships_created} relationships ({buildJob.progress.duration_seconds}s)
+                  </p>
+                )}
+                {buildJob.status === 'failed' && buildJob.error && (
+                  <p className="text-destructive">
+                    {buildJob.error.stage}: {buildJob.error.message}
+                  </p>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -251,6 +401,46 @@ export default function ReviewPage({ result, erd: _erd }: ReviewPageProps) {
             </TabsContent>
           </Tabs>
 
+          {/* CSV Upload (visible after approval) */}
+          {locked && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">CSV Data (optional)</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={csvInputRef}
+                    type="file"
+                    multiple
+                    accept=".csv"
+                    onChange={(e) => handleCSVUpload(e.target.files)}
+                    disabled={csvUploading}
+                    className="text-sm file:mr-2 file:rounded file:border-0 file:bg-primary file:px-3 file:py-1 file:text-sm file:text-primary-foreground hover:file:bg-primary/90"
+                  />
+                  {csvUploading && <span className="text-sm text-muted-foreground animate-pulse">Validating...</span>}
+                </div>
+                {csvTables.length > 0 && (
+                  <div className="space-y-1">
+                    {csvTables.map((t) => (
+                      <div key={t.table_name} className="flex items-center gap-2 text-sm">
+                        <Badge variant="default" className="bg-green-600">{t.table_name}</Badge>
+                        <span>{t.row_count} rows</span>
+                        <span className="text-muted-foreground">({t.columns.join(', ')})</span>
+                        {t.warnings.map((w, i) => (
+                          <span key={i} className="text-yellow-600 text-xs">{w}</span>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {!csvSessionId && csvTables.length === 0 && !csvUploading && (
+                  <p className="text-xs text-muted-foreground">No CSV uploaded — will use sample data</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Action buttons */}
           <div className="flex gap-2">
             <Button onClick={handleSave} disabled={locked || loading} variant="outline">
@@ -259,10 +449,39 @@ export default function ReviewPage({ result, erd: _erd }: ReviewPageProps) {
             <Button onClick={handleApprove} disabled={locked || loading}>
               {locked ? 'Approved' : loading ? 'Approving...' : 'Approve'}
             </Button>
-            <Button variant="outline" disabled>
-              Build KG (Week 4)
+            <Button
+              variant="outline"
+              onClick={handleBuildKG}
+              disabled={buildDisabled}
+            >
+              {buildLoading ? 'Building...' : csvSessionId ? 'Build KG (CSV)' : 'Build KG'}
             </Button>
+            {buildJob?.status === 'succeeded' && onGoToQuery && (
+              <Button onClick={onGoToQuery}>
+                Q&A
+              </Button>
+            )}
           </div>
+          {buildJob && (
+            <div className="rounded-lg border p-3 text-sm">
+              <p className="font-medium">
+                Build: <span className="capitalize">{buildJob.status}</span>
+              </p>
+              {(buildJob.status === 'queued' || buildJob.status === 'running') && (
+                <p className="text-muted-foreground animate-pulse">Processing...</p>
+              )}
+              {buildJob.status === 'succeeded' && buildJob.progress && (
+                <p className="text-green-700">
+                  {buildJob.progress.nodes_created} nodes, {buildJob.progress.relationships_created} relationships ({buildJob.progress.duration_seconds}s)
+                </p>
+              )}
+              {buildJob.status === 'failed' && buildJob.error && (
+                <p className="text-destructive">
+                  {buildJob.error.stage}: {buildJob.error.message}
+                </p>
+              )}
+            </div>
+          )}
         </>
       )}
 

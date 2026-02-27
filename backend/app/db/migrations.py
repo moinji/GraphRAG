@@ -29,3 +29,11 @@ def run_migrations() -> None:
         logger.info("Migrations applied successfully")
     except Exception:
         logger.warning("Failed to run migrations", exc_info=True)
+
+    # Week 4: ensure kg_builds table
+    try:
+        from app.db.kg_build_store import ensure_kg_builds_table
+
+        ensure_kg_builds_table()
+    except Exception:
+        logger.warning("Failed to ensure kg_builds table", exc_info=True)

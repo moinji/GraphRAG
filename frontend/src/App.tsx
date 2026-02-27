@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import UploadPage from '@/pages/UploadPage';
 import ReviewPage from '@/pages/ReviewPage';
+import QueryPage from '@/pages/QueryPage';
 import type { ERDSchema, OntologyGenerateResponse } from '@/types/ontology';
 
-type Page = 'upload' | 'review';
+type Page = 'upload' | 'review' | 'query';
 
 function App() {
   const [page, setPage] = useState<Page>('upload');
@@ -20,6 +21,14 @@ function App() {
     setPage('upload');
     setGenerateResult(null);
     setErd(null);
+  }
+
+  function handleGoToQuery() {
+    setPage('query');
+  }
+
+  function handleBackToReview() {
+    setPage('review');
   }
 
   return (
@@ -40,8 +49,9 @@ function App() {
       <main className="container mx-auto px-4 py-8">
         {page === 'upload' && <UploadPage onGenerated={handleGenerated} />}
         {page === 'review' && generateResult && erd && (
-          <ReviewPage result={generateResult} erd={erd} />
+          <ReviewPage result={generateResult} erd={erd} onGoToQuery={handleGoToQuery} />
         )}
+        {page === 'query' && <QueryPage onBack={handleBackToReview} />}
       </main>
     </div>
   );

@@ -24,6 +24,17 @@ class Settings(BaseSettings):
     # Anthropic
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-4-20250514"
+    anthropic_router_model: str = "claude-haiku-4-5-20251001"
+
+    # B안 Local Search
+    local_search_model: str = "claude-sonnet-4-20250514"
+    local_search_max_tokens: int = 2048
+    local_search_default_depth: int = 2
+    local_search_max_nodes: int = 50
+
+    # CSV Import
+    csv_max_file_size_mb: int = 50
+    csv_max_files: int = 20
 
     # App
     app_env: str = "development"

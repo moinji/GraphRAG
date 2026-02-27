@@ -42,6 +42,7 @@ def enrich_ontology(
         response = client.messages.create(
             model=settings.anthropic_model,
             max_tokens=4096,
+            temperature=0,
             system=CORE_SYSTEM_PROMPT,
             messages=messages,
         )

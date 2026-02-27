@@ -113,3 +113,66 @@ export interface OntologyApproveResponse {
   version_id: number;
   status: string;
 }
+
+// ── KG Build ────────────────────────────────────────────────────
+
+export interface KGBuildProgress {
+  nodes_created: number;
+  relationships_created: number;
+  duration_seconds: number;
+}
+
+export interface KGBuildErrorDetail {
+  stage: string;
+  message: string;
+  detail: string;
+}
+
+export interface KGBuildResponse {
+  build_job_id: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed';
+  progress: KGBuildProgress | null;
+  error: KGBuildErrorDetail | null;
+  version_id: number;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+// ── CSV Import ─────────────────────────────────────────────────
+
+export interface CSVTableSummary {
+  table_name: string;
+  row_count: number;
+  columns: string[];
+  warnings: string[];
+}
+
+export interface CSVUploadResponse {
+  csv_session_id: string;
+  tables: CSVTableSummary[];
+  errors: string[];
+}
+
+// ── Query API ──────────────────────────────────────────────────
+
+export interface QueryResponse {
+  question: string;
+  answer: string;
+  cypher: string;
+  paths: string[];
+  template_id: string;
+  route: string;
+  matched_by: string;
+  error: string | null;
+  mode: string;
+  subgraph_context: string | null;
+  llm_tokens_used: number | null;
+  latency_ms: number | null;
+  cached: boolean;
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  data?: QueryResponse;
+}

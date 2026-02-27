@@ -128,7 +128,52 @@ class OntologyApproveResponse(BaseModel):
     status: str
 
 
-# ── Query Result ───────────────────────────────────────────────────
+# ── KG Build Job ──────────────────────────────────────────────────
+
+class KGBuildRequest(BaseModel):
+    version_id: int
+    erd: ERDSchema
+    csv_session_id: str | None = None
+
+
+class KGBuildProgress(BaseModel):
+    nodes_created: int = 0
+    relationships_created: int = 0
+    duration_seconds: float = 0.0
+
+
+class KGBuildErrorDetail(BaseModel):
+    stage: str
+    message: str
+    detail: str = ""
+
+
+class KGBuildResponse(BaseModel):
+    build_job_id: str
+    status: str  # queued | running | succeeded | failed
+    progress: KGBuildProgress | None = None
+    error: KGBuildErrorDetail | None = None
+    version_id: int
+    started_at: str | None = None
+    completed_at: str | None = None
+
+
+# ── CSV Import ───────────────────────────────────────────────────
+
+class CSVTableSummary(BaseModel):
+    table_name: str
+    row_count: int
+    columns: list[str]
+    warnings: list[str] = []
+
+
+class CSVUploadResponse(BaseModel):
+    csv_session_id: str
+    tables: list[CSVTableSummary]
+    errors: list[str] = []
+
+
+# ── Query Result (v0 demo) ─────────────────────────────────────────
 
 class QueryResult(BaseModel):
     question: str
@@ -136,3 +181,65 @@ class QueryResult(BaseModel):
     cypher: str
     paths: list[str] = []
     template_id: str = ""
+
+
+# ── Query API (v0.5 hybrid router) ────────────────────────────────
+
+class QueryRequest(BaseModel):
+    question: str
+    mode: str = "a"  # "a" | "b"
+
+
+class QueryResponse(BaseModel):
+    question: str
+    answer: str
+    cypher: str
+    paths: list[str] = []
+    template_id: str = ""
+    route: str = ""           # cypher_traverse | cypher_agg | unsupported
+    matched_by: str = ""      # rule | llm | none
+    error: str | None = None
+    mode: str = "a"
+    subgraph_context: str | None = None
+    llm_tokens_used: int | None = None
+    latency_ms: int | None = None
+    cached: bool = False
+
+
+# ── QA Evaluation ────────────────────────────────────────────────
+
+class QAGoldenPair(BaseModel):
+    id: str
+    question: str
+    category: str                    # traverse | aggregate | comparison | unsupported
+    expected_keywords: list[str]
+    expected_entities: list[str]
+    difficulty: str = "medium"
+
+
+class QASingleResult(BaseModel):
+    qa_id: str
+    mode: str
+    question: str
+    answer: str
+    keyword_score: float
+    entity_score: float
+    latency_ms: int
+    llm_tokens: int = 0
+    success: bool
+    error: str | None = None
+
+
+class QAComparisonReport(BaseModel):
+    total_pairs: int
+    a_results: list[QASingleResult]
+    b_results: list[QASingleResult]
+    a_success_count: int
+    b_success_count: int
+    a_avg_latency_ms: float
+    b_avg_latency_ms: float
+    a_avg_keyword_score: float
+    b_avg_keyword_score: float
+    b_total_tokens: int
+    b_estimated_cost_usd: float
+    recommendation: str

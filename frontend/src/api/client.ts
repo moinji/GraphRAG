@@ -1,10 +1,13 @@
 import type {
+  CSVUploadResponse,
   ERDSchema,
+  KGBuildResponse,
   OntologyApproveResponse,
   OntologyGenerateResponse,
   OntologySpec,
   OntologyUpdateResponse,
   OntologyVersionResponse,
+  QueryResponse,
 } from '@/types/ontology';
 
 const BASE = '/api/v1';
@@ -70,4 +73,56 @@ export async function approveVersion(
     `${BASE}/ontology/versions/${id}/approve`,
     { method: 'POST' },
   );
+}
+
+/** Upload CSV files for KG build. */
+export async function uploadCSVFiles(
+  files: File[],
+  erd: ERDSchema,
+): Promise<CSVUploadResponse> {
+  const form = new FormData();
+  for (const file of files) {
+    form.append('files', file);
+  }
+  form.append('erd_json', JSON.stringify(erd));
+  return request<CSVUploadResponse>(`${BASE}/csv/upload`, {
+    method: 'POST',
+    body: form,
+  });
+}
+
+/** Start a KG build job for an approved version. */
+export async function startKGBuild(
+  versionId: number,
+  erd: ERDSchema,
+  csvSessionId?: string,
+): Promise<KGBuildResponse> {
+  const payload: Record<string, unknown> = { version_id: versionId, erd };
+  if (csvSessionId) {
+    payload.csv_session_id = csvSessionId;
+  }
+  return request<KGBuildResponse>(`${BASE}/kg/build`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Poll KG build job status. */
+export async function getKGBuildStatus(
+  jobId: string,
+): Promise<KGBuildResponse> {
+  return request<KGBuildResponse>(`${BASE}/kg/build/${jobId}`);
+}
+
+/** Send a natural-language query to the Q&A pipeline. */
+export async function sendQuery(
+  question: string,
+  mode: string = 'a',
+): Promise<QueryResponse> {
+  return request<QueryResponse>(`${BASE}/query`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question, mode }),
+  });
 }

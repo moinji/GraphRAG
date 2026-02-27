@@ -63,6 +63,15 @@ class VersionConflictError(Exception):
         super().__init__(detail)
 
 
+class BuildJobNotFoundError(Exception):
+    """Raised when a KG build job is not found."""
+
+    def __init__(self, job_id: str):
+        self.detail = f"Build job {job_id} not found"
+        self.job_id = job_id
+        super().__init__(self.detail)
+
+
 async def ddl_parse_error_handler(_request: Request, exc: DDLParseError) -> JSONResponse:
     return JSONResponse(status_code=422, content={"detail": exc.detail})
 
@@ -97,3 +106,69 @@ async def version_conflict_handler(
     _request: Request, exc: VersionConflictError
 ) -> JSONResponse:
     return JSONResponse(status_code=409, content={"detail": exc.detail})
+
+
+async def build_job_not_found_handler(
+    _request: Request, exc: BuildJobNotFoundError
+) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": exc.detail})
+
+
+class QueryRoutingError(Exception):
+    """Raised when query routing fails (invalid input)."""
+
+    def __init__(self, detail: str = "Query routing failed"):
+        self.detail = detail
+        super().__init__(detail)
+
+
+class CypherExecutionError(Exception):
+    """Raised when Neo4j Cypher execution fails."""
+
+    def __init__(self, detail: str = "Cypher execution failed"):
+        self.detail = detail
+        super().__init__(detail)
+
+
+async def query_routing_error_handler(
+    _request: Request, exc: QueryRoutingError
+) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"detail": exc.detail})
+
+
+async def cypher_execution_error_handler(
+    _request: Request, exc: CypherExecutionError
+) -> JSONResponse:
+    return JSONResponse(status_code=502, content={"detail": exc.detail})
+
+
+class CSVValidationError(Exception):
+    """Raised when CSV upload validation fails."""
+
+    def __init__(self, detail: str = "CSV validation failed", errors: list[str] | None = None):
+        self.detail = detail
+        self.errors = errors or []
+        super().__init__(detail)
+
+
+async def csv_validation_error_handler(
+    _request: Request, exc: CSVValidationError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.detail, "errors": exc.errors},
+    )
+
+
+class LocalSearchError(Exception):
+    """Raised when B안 local search fails."""
+
+    def __init__(self, detail: str = "Local search failed"):
+        self.detail = detail
+        super().__init__(detail)
+
+
+async def local_search_error_handler(
+    _request: Request, exc: LocalSearchError
+) -> JSONResponse:
+    return JSONResponse(status_code=502, content={"detail": exc.detail})
