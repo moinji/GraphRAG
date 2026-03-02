@@ -243,3 +243,35 @@ class QAComparisonReport(BaseModel):
     b_total_tokens: int
     b_estimated_cost_usd: float
     recommendation: str
+
+
+# ── Graph Visualization ─────────────────────────────────────────
+
+class GraphNode(BaseModel):
+    id: str
+    label: str
+    properties: dict[str, str | int | float | bool | None] = {}
+    display_name: str = ""
+
+
+class GraphEdge(BaseModel):
+    id: str
+    source: str
+    target: str
+    rel_type: str
+    properties: dict[str, str | int | float | bool | None] = {}
+
+
+class GraphData(BaseModel):
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
+    total_nodes: int = 0
+    total_edges: int = 0
+    truncated: bool = False
+
+
+class GraphStats(BaseModel):
+    node_counts: dict[str, int] = {}
+    edge_counts: dict[str, int] = {}
+    total_nodes: int = 0
+    total_edges: int = 0

@@ -9,6 +9,7 @@ import type {
   OntologyVersionResponse,
   QueryResponse,
 } from '@/types/ontology';
+import type { GraphData, GraphStats } from '@/types/graph';
 
 const BASE = '/api/v1';
 
@@ -125,4 +126,26 @@ export async function sendQuery(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ question, mode }),
   });
+}
+
+// ── Graph Visualization API ──────────────────────────────────────
+
+/** Fetch node/edge type counts from the graph. */
+export async function fetchGraphStats(): Promise<GraphStats> {
+  return request<GraphStats>(`${BASE}/graph/stats`);
+}
+
+/** Fetch the full graph data (up to limit nodes). */
+export async function fetchGraph(limit: number = 500): Promise<GraphData> {
+  return request<GraphData>(`${BASE}/graph/full?limit=${limit}`);
+}
+
+/** Fetch neighbors of a specific node. */
+export async function fetchNeighbors(
+  nodeId: string,
+  depth: number = 1,
+): Promise<GraphData> {
+  return request<GraphData>(
+    `${BASE}/graph/neighbors/${encodeURIComponent(nodeId)}?depth=${depth}`,
+  );
 }
