@@ -1,0 +1,378 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1050" font-family="'Segoe UI', 'Noto Sans KR', Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="10" markerHeight="7" orient="auto-start-reverse">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="10" markerHeight="7" orient="auto-start-reverse">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#3b82f6"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="10" markerHeight="7" orient="auto-start-reverse">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#22c55e"/>
+    </marker>
+    <marker id="arrow-orange" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="10" markerHeight="7" orient="auto-start-reverse">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#f97316"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="10" markerHeight="7" orient="auto-start-reverse">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#8b5cf6"/>
+    </marker>
+    <marker id="arrow-dash" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="10" markerHeight="7" orient="auto-start-reverse">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8"/>
+    </marker>
+    <filter id="shadow" x="-4%" y="-4%" width="108%" height="112%">
+      <feDropShadow dx="1" dy="2" stdDeviation="3" flood-opacity="0.1"/>
+    </filter>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fafbfd"/>
+      <stop offset="100%" stop-color="#f1f3f8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 배경 -->
+  <rect width="1400" height="1050" fill="url(#bgGrad)" rx="16"/>
+
+  <!-- 제목 -->
+  <text x="700" y="42" text-anchor="middle" font-size="22" font-weight="700" fill="#1e293b">GraphRAG  Pipeline Architecture</text>
+  <text x="700" y="64" text-anchor="middle" font-size="13" fill="#64748b">SQL DDL  →  Knowledge Graph  →  Query &amp; Visualization</text>
+
+  <!-- ============================================================ -->
+  <!-- STAGE 1: 스키마 입력 및 파싱 (파랑) -->
+  <!-- ============================================================ -->
+  <rect x="30" y="85" width="310" height="360" rx="14" fill="#eff6ff" stroke="#3b82f6" stroke-width="2.5" filter="url(#shadow)"/>
+  <rect x="30" y="85" width="310" height="36" rx="14" fill="#3b82f6"/>
+  <rect x="30" y="107" width="310" height="14" fill="#3b82f6"/>
+  <text x="185" y="109" text-anchor="middle" font-size="14" font-weight="700" fill="white">STAGE 1  ·  스키마 입력 및 파싱</text>
+
+  <!-- .sql 파일 -->
+  <rect x="65" y="140" width="120" height="48" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="125" y="161" text-anchor="middle" font-size="12" font-weight="600" fill="#1e40af">.sql DDL</text>
+  <text x="125" y="177" text-anchor="middle" font-size="9" fill="#3b82f6">SQL 스키마 파일</text>
+
+  <!-- .csv 파일 -->
+  <rect x="210" y="140" width="110" height="48" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="265" y="161" text-anchor="middle" font-size="12" font-weight="600" fill="#1e40af">.csv 데이터</text>
+  <text x="265" y="177" text-anchor="middle" font-size="9" fill="#3b82f6">(선택사항)</text>
+
+  <!-- DDL Parser -->
+  <rect x="60" y="215" width="140" height="52" rx="10" fill="white" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="130" y="237" text-anchor="middle" font-size="12" font-weight="600" fill="#1e3a5f">DDL Parser</text>
+  <text x="130" y="254" text-anchor="middle" font-size="9" fill="#64748b">sqlglot + regex</text>
+
+  <!-- CSV Parser -->
+  <rect x="215" y="215" width="110" height="52" rx="10" fill="white" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="270" y="237" text-anchor="middle" font-size="12" font-weight="600" fill="#1e3a5f">CSV Parser</text>
+  <text x="270" y="254" text-anchor="middle" font-size="9" fill="#64748b">유효성 검증</text>
+
+  <!-- ERDSchema -->
+  <rect x="62" y="300" width="155" height="56" rx="28" fill="#fefce8" stroke="#eab308" stroke-width="2"/>
+  <text x="139" y="323" text-anchor="middle" font-size="13" font-weight="700" fill="#854d0e">ERDSchema</text>
+  <text x="139" y="342" text-anchor="middle" font-size="9" fill="#a16207">테이블 · 컬럼 · FK</text>
+
+  <!-- CSV Session -->
+  <rect x="230" y="300" width="95" height="56" rx="28" fill="#fefce8" stroke="#eab308" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="277" y="323" text-anchor="middle" font-size="11" font-weight="600" fill="#854d0e">CSV 세션</text>
+  <text x="277" y="340" text-anchor="middle" font-size="9" fill="#a16207">인메모리</text>
+
+  <!-- S1 화살표 -->
+  <line x1="125" y1="188" x2="125" y2="215" stroke="#3b82f6" stroke-width="1.8" marker-end="url(#arrow-blue)"/>
+  <line x1="265" y1="188" x2="265" y2="215" stroke="#3b82f6" stroke-width="1.2" stroke-dasharray="5,3" marker-end="url(#arrow-blue)"/>
+  <line x1="130" y1="267" x2="135" y2="300" stroke="#3b82f6" stroke-width="1.8" marker-end="url(#arrow-blue)"/>
+  <line x1="270" y1="267" x2="275" y2="300" stroke="#3b82f6" stroke-width="1.2" stroke-dasharray="5,3" marker-end="url(#arrow-blue)"/>
+
+  <!-- ============================================================ -->
+  <!-- STAGE 2: 온톨로지 생성 (초록) -->
+  <!-- ============================================================ -->
+  <rect x="370" y="85" width="310" height="360" rx="14" fill="#f0fdf4" stroke="#22c55e" stroke-width="2.5" filter="url(#shadow)"/>
+  <rect x="370" y="85" width="310" height="36" rx="14" fill="#22c55e"/>
+  <rect x="370" y="107" width="310" height="14" fill="#22c55e"/>
+  <text x="525" y="109" text-anchor="middle" font-size="14" font-weight="700" fill="white">STAGE 2  ·  온톨로지 자동 생성</text>
+
+  <!-- FK Rule Engine -->
+  <rect x="395" y="135" width="260" height="78" rx="10" fill="white" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="525" y="155" text-anchor="middle" font-size="12" font-weight="700" fill="#14532d">FK Rule Engine</text>
+  <text x="525" y="171" text-anchor="middle" font-size="9" fill="#64748b">테이블 → PascalCase 노드 라벨</text>
+  <text x="525" y="183" text-anchor="middle" font-size="9" fill="#64748b">FK 컬럼 → 관계 타입 · 조인테이블 변환</text>
+  <text x="525" y="200" text-anchor="middle" font-size="9" fill="#16a34a">결정론적 · 도메인 무관</text>
+
+  <!-- LLM 보강 -->
+  <rect x="395" y="235" width="260" height="60" rx="10" fill="white" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="525" y="258" text-anchor="middle" font-size="12" font-weight="700" fill="#14532d">LLM 보강 (선택)</text>
+  <text x="525" y="274" text-anchor="middle" font-size="9" fill="#64748b">Claude API · 관계 개선 · 의미적 관계 추가</text>
+  <text x="525" y="287" text-anchor="middle" font-size="9" fill="#16a34a">derivation = "llm_suggested"</text>
+
+  <!-- 평가 -->
+  <rect x="420" y="316" width="95" height="36" rx="8" fill="#dcfce7" stroke="#22c55e" stroke-width="1.2"/>
+  <text x="467" y="339" text-anchor="middle" font-size="10" font-weight="600" fill="#14532d">품질 평가</text>
+
+  <!-- OntologySpec -->
+  <rect x="530" y="310" width="125" height="50" rx="25" fill="#fefce8" stroke="#eab308" stroke-width="2"/>
+  <text x="592" y="332" text-anchor="middle" font-size="13" font-weight="700" fill="#854d0e">OntologySpec</text>
+  <text x="592" y="348" text-anchor="middle" font-size="9" fill="#a16207">노드 · 관계 · 속성</text>
+
+  <!-- S2 화살표 -->
+  <line x1="525" y1="213" x2="525" y2="235" stroke="#22c55e" stroke-width="1.8" marker-end="url(#arrow-green)"/>
+  <line x1="525" y1="295" x2="467" y2="316" stroke="#22c55e" stroke-width="1.2" marker-end="url(#arrow-green)"/>
+  <line x1="525" y1="295" x2="570" y2="310" stroke="#22c55e" stroke-width="1.8" marker-end="url(#arrow-green)"/>
+
+  <!-- S1 → S2 연결 -->
+  <line x1="217" y1="328" x2="395" y2="174" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <rect x="270" y="236" width="80" height="18" rx="4" fill="#fefce8" stroke="#eab308" stroke-width="1"/>
+  <text x="310" y="249" text-anchor="middle" font-size="9" font-weight="600" fill="#854d0e">ERDSchema</text>
+
+  <!-- ============================================================ -->
+  <!-- STAGE 3: 검토 및 KG 빌드 (주황) -->
+  <!-- ============================================================ -->
+  <rect x="710" y="85" width="310" height="360" rx="14" fill="#fff7ed" stroke="#f97316" stroke-width="2.5" filter="url(#shadow)"/>
+  <rect x="710" y="85" width="310" height="36" rx="14" fill="#f97316"/>
+  <rect x="710" y="107" width="310" height="14" fill="#f97316"/>
+  <text x="865" y="109" text-anchor="middle" font-size="14" font-weight="700" fill="white">STAGE 3  ·  검토 및 KG 빌드</text>
+
+  <!-- 사용자 검토 -->
+  <rect x="735" y="135" width="260" height="60" rx="10" fill="white" stroke="#f97316" stroke-width="1.5"/>
+  <text x="865" y="157" text-anchor="middle" font-size="12" font-weight="700" fill="#7c2d12">사용자 검토 (ReviewPage)</text>
+  <text x="865" y="173" text-anchor="middle" font-size="9" fill="#64748b">노드/관계 편집 · LLM Diff 확인 · 평가 메트릭</text>
+  <text x="865" y="187" text-anchor="middle" font-size="9" fill="#ea580c">CSV 업로드 가능</text>
+
+  <!-- Approve -->
+  <rect x="820" y="213" width="90" height="32" rx="16" fill="#f97316" stroke="#ea580c" stroke-width="1.5"/>
+  <text x="865" y="234" text-anchor="middle" font-size="12" font-weight="700" fill="white">Approve</text>
+
+  <!-- KG Builder -->
+  <rect x="735" y="265" width="260" height="95" rx="10" fill="white" stroke="#f97316" stroke-width="1.5"/>
+  <text x="865" y="287" text-anchor="middle" font-size="12" font-weight="700" fill="#7c2d12">KG Builder</text>
+  <text x="865" y="303" text-anchor="middle" font-size="9" fill="#64748b">1. 데이터 소스 결정 (CSV 또는 샘플 생성)</text>
+  <text x="865" y="316" text-anchor="middle" font-size="9" fill="#64748b">2. FK 무결성 검증</text>
+  <text x="865" y="329" text-anchor="middle" font-size="9" fill="#64748b">3. Neo4j UNWIND + MERGE 배치 로드</text>
+  <text x="865" y="342" text-anchor="middle" font-size="9" fill="#64748b">4. 카운트 검증</text>
+  <text x="865" y="355" text-anchor="middle" font-size="9" fill="#ea580c">비동기 백그라운드 태스크 (202)</text>
+
+  <!-- KG 완성 -->
+  <circle cx="865" cy="400" r="22" fill="#22c55e" stroke="#16a34a" stroke-width="2"/>
+  <text x="865" y="405" text-anchor="middle" font-size="18" fill="white">&#x2713;</text>
+  <text x="865" y="433" text-anchor="middle" font-size="10" font-weight="600" fill="#14532d">KG 완성</text>
+
+  <!-- S3 화살표 -->
+  <line x1="865" y1="195" x2="865" y2="213" stroke="#f97316" stroke-width="1.8" marker-end="url(#arrow-orange)"/>
+  <line x1="865" y1="245" x2="865" y2="265" stroke="#f97316" stroke-width="1.8" marker-end="url(#arrow-orange)"/>
+  <line x1="865" y1="360" x2="865" y2="378" stroke="#f97316" stroke-width="1.8" marker-end="url(#arrow-orange)"/>
+
+  <!-- S2 → S3 연결 -->
+  <line x1="655" y1="335" x2="735" y2="165" stroke="#22c55e" stroke-width="2" marker-end="url(#arrow-orange)"/>
+  <rect x="660" y="235" width="90" height="18" rx="4" fill="#fefce8" stroke="#eab308" stroke-width="1"/>
+  <text x="705" y="248" text-anchor="middle" font-size="9" font-weight="600" fill="#854d0e">OntologySpec</text>
+
+  <!-- S1 CSV → S3 KG Builder 연결 -->
+  <path d="M 277 356 Q 277 420 735 312" fill="none" stroke="#eab308" stroke-width="1.5" stroke-dasharray="6,3" marker-end="url(#arrow-dash)"/>
+  <text x="460" y="400" text-anchor="middle" font-size="9" fill="#a16207">csv_session_id</text>
+
+  <!-- S1 ERD → S3 연결 -->
+  <path d="M 139 356 Q 139 470 735 320" fill="none" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="6,3" marker-end="url(#arrow-dash)"/>
+  <text x="380" y="430" text-anchor="middle" font-size="9" fill="#3b82f6">ERDSchema</text>
+
+  <!-- ============================================================ -->
+  <!-- STAGE 4: 활용 (보라) -->
+  <!-- ============================================================ -->
+  <rect x="1050" y="85" width="320" height="360" rx="14" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="2.5" filter="url(#shadow)"/>
+  <rect x="1050" y="85" width="320" height="36" rx="14" fill="#8b5cf6"/>
+  <rect x="1050" y="107" width="320" height="14" fill="#8b5cf6"/>
+  <text x="1210" y="109" text-anchor="middle" font-size="14" font-weight="700" fill="white">STAGE 4  ·  활용</text>
+
+  <!-- Mode A -->
+  <rect x="1070" y="135" width="135" height="130" rx="10" fill="white" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="1137" y="155" text-anchor="middle" font-size="11" font-weight="700" fill="#3b0764">Mode A</text>
+  <text x="1137" y="170" text-anchor="middle" font-size="10" font-weight="600" fill="#7c3aed">템플릿 기반 질의</text>
+  <line x1="1085" y1="178" x2="1190" y2="178" stroke="#e9d5ff" stroke-width="1"/>
+  <text x="1137" y="195" text-anchor="middle" font-size="9" fill="#64748b">규칙 매칭 (regex)</text>
+  <text x="1137" y="209" text-anchor="middle" font-size="9" fill="#64748b">LLM 라우터 (Haiku)</text>
+  <text x="1137" y="223" text-anchor="middle" font-size="9" fill="#64748b">Cypher 생성/실행</text>
+  <text x="1137" y="240" text-anchor="middle" font-size="9" fill="#64748b">결과 포맷팅</text>
+  <text x="1137" y="257" text-anchor="middle" font-size="9" fill="#7c3aed">Neo4j 직접 질의</text>
+
+  <!-- Mode B -->
+  <rect x="1218" y="135" width="135" height="130" rx="10" fill="white" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="1285" y="155" text-anchor="middle" font-size="11" font-weight="700" fill="#3b0764">Mode B</text>
+  <text x="1285" y="170" text-anchor="middle" font-size="10" font-weight="600" fill="#7c3aed">로컬 서치</text>
+  <line x1="1233" y1="178" x2="1338" y2="178" stroke="#e9d5ff" stroke-width="1"/>
+  <text x="1285" y="195" text-anchor="middle" font-size="9" fill="#64748b">엔티티 추출</text>
+  <text x="1285" y="209" text-anchor="middle" font-size="9" fill="#64748b">서브그래프 탐색</text>
+  <text x="1285" y="223" text-anchor="middle" font-size="9" fill="#64748b">(1~3홉)</text>
+  <text x="1285" y="240" text-anchor="middle" font-size="9" fill="#64748b">Claude Sonnet</text>
+  <text x="1285" y="257" text-anchor="middle" font-size="9" fill="#7c3aed">컨텍스트 기반 답변</text>
+
+  <!-- 답변 -->
+  <rect x="1095" y="282" width="230" height="36" rx="8" fill="#ede9fe" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="1210" y="305" text-anchor="middle" font-size="11" font-weight="600" fill="#3b0764">답변 + Cypher + 증거경로</text>
+
+  <!-- 그래프 탐색 -->
+  <rect x="1070" y="335" width="283" height="95" rx="10" fill="white" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="1210" y="355" text-anchor="middle" font-size="11" font-weight="700" fill="#3b0764">그래프 탐색 (ExplorePage)</text>
+  <line x1="1085" y1="362" x2="1338" y2="362" stroke="#e9d5ff" stroke-width="1"/>
+  <text x="1210" y="378" text-anchor="middle" font-size="9" fill="#64748b">Cytoscape.js · Canvas 렌더링</text>
+  <text x="1210" y="393" text-anchor="middle" font-size="9" fill="#64748b">타입별 색상 · COSE/Grid 레이아웃 · 필터/검색</text>
+  <text x="1210" y="408" text-anchor="middle" font-size="9" fill="#64748b">노드 클릭 → 속성 패널 · Expand → 이웃 로드</text>
+  <text x="1210" y="423" text-anchor="middle" font-size="9" fill="#7c3aed">Graph API: /stats · /full · /neighbors</text>
+
+  <!-- S3 → S4 연결 -->
+  <line x1="887" y1="400" x2="1070" y2="200" stroke="#f97316" stroke-width="2" marker-end="url(#arrow-purple)"/>
+  <line x1="887" y1="400" x2="1070" y2="385" stroke="#f97316" stroke-width="2" marker-end="url(#arrow-purple)"/>
+  <text x="975" y="272" text-anchor="middle" font-size="9" fill="#f97316">Cypher 질의</text>
+  <text x="990" y="402" text-anchor="middle" font-size="9" fill="#f97316">GraphData</text>
+
+  <!-- ============================================================ -->
+  <!-- 인프라 레이어 -->
+  <!-- ============================================================ -->
+  <rect x="30" y="470" width="1340" height="120" rx="14" fill="#f8fafc" stroke="#94a3b8" stroke-width="2" filter="url(#shadow)"/>
+  <text x="700" y="494" text-anchor="middle" font-size="13" font-weight="700" fill="#475569">Infrastructure  (Docker Compose)</text>
+
+  <!-- Neo4j -->
+  <rect x="80" y="510" width="200" height="65" rx="12" fill="#dbeafe" stroke="#3b82f6" stroke-width="2"/>
+  <circle cx="108" cy="542" r="16" fill="#3b82f6"/>
+  <text x="108" y="548" text-anchor="middle" font-size="14" fill="white">G</text>
+  <text x="190" y="535" text-anchor="middle" font-size="13" font-weight="700" fill="#1e40af">Neo4j</text>
+  <text x="190" y="552" text-anchor="middle" font-size="9" fill="#3b82f6">그래프 DB · Bolt :7687</text>
+  <text x="190" y="566" text-anchor="middle" font-size="9" fill="#64748b">노드/관계 저장 · Cypher 질의</text>
+
+  <!-- PostgreSQL -->
+  <rect x="320" y="510" width="200" height="65" rx="12" fill="#dcfce7" stroke="#22c55e" stroke-width="2"/>
+  <circle cx="348" cy="542" r="16" fill="#22c55e"/>
+  <text x="348" y="548" text-anchor="middle" font-size="14" fill="white">P</text>
+  <text x="430" y="535" text-anchor="middle" font-size="13" font-weight="700" fill="#14532d">PostgreSQL</text>
+  <text x="430" y="552" text-anchor="middle" font-size="9" fill="#22c55e">메타데이터 · :5432</text>
+  <text x="430" y="566" text-anchor="middle" font-size="9" fill="#64748b">온톨로지 버전 · 빌드 이력</text>
+
+  <!-- Redis -->
+  <rect x="560" y="510" width="200" height="65" rx="12" fill="#fef2f2" stroke="#ef4444" stroke-width="2"/>
+  <circle cx="588" cy="542" r="16" fill="#ef4444"/>
+  <text x="588" y="548" text-anchor="middle" font-size="14" fill="white">R</text>
+  <text x="670" y="535" text-anchor="middle" font-size="13" font-weight="700" fill="#991b1b">Redis</text>
+  <text x="670" y="552" text-anchor="middle" font-size="9" fill="#ef4444">캐시/세션 · :6379</text>
+  <text x="670" y="566" text-anchor="middle" font-size="9" fill="#64748b">CSV 세션 · 쿼리 캐시</text>
+
+  <!-- Backend -->
+  <rect x="800" y="510" width="200" height="65" rx="12" fill="#fff7ed" stroke="#f97316" stroke-width="2"/>
+  <circle cx="828" cy="542" r="16" fill="#f97316"/>
+  <text x="828" y="548" text-anchor="middle" font-size="12" fill="white">F</text>
+  <text x="910" y="535" text-anchor="middle" font-size="13" font-weight="700" fill="#7c2d12">FastAPI</text>
+  <text x="910" y="552" text-anchor="middle" font-size="9" fill="#f97316">Backend · :8000</text>
+  <text x="910" y="566" text-anchor="middle" font-size="9" fill="#64748b">REST API · 비동기 태스크</text>
+
+  <!-- Frontend -->
+  <rect x="1040" y="510" width="290" height="65" rx="12" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="2"/>
+  <circle cx="1068" cy="542" r="16" fill="#8b5cf6"/>
+  <text x="1068" y="548" text-anchor="middle" font-size="12" fill="white">R</text>
+  <text x="1200" y="535" text-anchor="middle" font-size="13" font-weight="700" fill="#3b0764">React + Nginx</text>
+  <text x="1200" y="552" text-anchor="middle" font-size="9" fill="#8b5cf6">Frontend · :80</text>
+  <text x="1200" y="566" text-anchor="middle" font-size="9" fill="#64748b">Upload · Review · Query · Explore</text>
+
+  <!-- 인프라 ↔ 스테이지 점선 연결 -->
+  <!-- Neo4j 연결 -->
+  <line x1="180" y1="510" x2="865" y2="445" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="5,3"/>
+  <line x1="180" y1="510" x2="1137" y2="445" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="5,3"/>
+  <line x1="180" y1="510" x2="1210" y2="430" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="5,3"/>
+
+  <!-- PG 연결 -->
+  <line x1="420" y1="510" x2="467" y2="352" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="5,3"/>
+  <line x1="420" y1="510" x2="865" y2="195" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="5,3"/>
+
+  <!-- ============================================================ -->
+  <!-- 하단: 기술 스택 + 데이터 흐름 요약 -->
+  <!-- ============================================================ -->
+  <rect x="30" y="610" width="1340" height="90" rx="14" fill="white" stroke="#e2e8f0" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="700" y="635" text-anchor="middle" font-size="13" font-weight="700" fill="#1e293b">End-to-End 데이터 흐름</text>
+
+  <!-- 플로우 박스들 -->
+  <rect x="60" y="650" width="80" height="32" rx="6" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="100" y="671" text-anchor="middle" font-size="10" font-weight="600" fill="#1e40af">.sql DDL</text>
+
+  <text x="155" y="671" text-anchor="middle" font-size="14" fill="#64748b">&#x2192;</text>
+
+  <rect x="170" y="650" width="80" height="32" rx="6" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="210" y="671" text-anchor="middle" font-size="10" font-weight="600" fill="#1e40af">파싱</text>
+
+  <text x="265" y="671" text-anchor="middle" font-size="14" fill="#64748b">&#x2192;</text>
+
+  <rect x="280" y="650" width="100" height="32" rx="6" fill="#fefce8" stroke="#eab308" stroke-width="1.5"/>
+  <text x="330" y="671" text-anchor="middle" font-size="10" font-weight="600" fill="#854d0e">ERDSchema</text>
+
+  <text x="395" y="671" text-anchor="middle" font-size="14" fill="#64748b">&#x2192;</text>
+
+  <rect x="410" y="650" width="120" height="32" rx="6" fill="#dcfce7" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="470" y="671" text-anchor="middle" font-size="10" font-weight="600" fill="#14532d">FK규칙 + LLM</text>
+
+  <text x="545" y="671" text-anchor="middle" font-size="14" fill="#64748b">&#x2192;</text>
+
+  <rect x="560" y="650" width="110" height="32" rx="6" fill="#fefce8" stroke="#eab308" stroke-width="1.5"/>
+  <text x="615" y="671" text-anchor="middle" font-size="10" font-weight="600" fill="#854d0e">OntologySpec</text>
+
+  <text x="685" y="671" text-anchor="middle" font-size="14" fill="#64748b">&#x2192;</text>
+
+  <rect x="700" y="650" width="90" height="32" rx="6" fill="#ffedd5" stroke="#f97316" stroke-width="1.5"/>
+  <text x="745" y="671" text-anchor="middle" font-size="10" font-weight="600" fill="#7c2d12">검토/승인</text>
+
+  <text x="805" y="671" text-anchor="middle" font-size="14" fill="#64748b">&#x2192;</text>
+
+  <rect x="820" y="650" width="80" height="32" rx="6" fill="#ffedd5" stroke="#f97316" stroke-width="1.5"/>
+  <text x="860" y="671" text-anchor="middle" font-size="10" font-weight="600" fill="#7c2d12">KG 빌드</text>
+
+  <text x="915" y="671" text-anchor="middle" font-size="14" fill="#64748b">&#x2192;</text>
+
+  <rect x="930" y="650" width="100" height="32" rx="6" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="980" y="671" text-anchor="middle" font-size="10" font-weight="600" fill="#1e40af">Neo4j KG</text>
+
+  <text x="1045" y="671" text-anchor="middle" font-size="14" fill="#64748b">&#x2192;</text>
+
+  <rect x="1060" y="645" width="120" height="42" rx="6" fill="#ede9fe" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="1120" y="662" text-anchor="middle" font-size="10" font-weight="600" fill="#3b0764">자연어 질의</text>
+  <text x="1120" y="677" text-anchor="middle" font-size="10" font-weight="600" fill="#3b0764">그래프 시각화</text>
+
+  <!-- CSV 분기 -->
+  <rect x="715" y="692" width="90" height="24" rx="6" fill="#fefce8" stroke="#eab308" stroke-width="1" stroke-dasharray="4,2"/>
+  <text x="760" y="708" text-anchor="middle" font-size="9" fill="#a16207">.csv 데이터</text>
+  <line x1="760" y1="692" x2="860" y2="682" stroke="#eab308" stroke-width="1" stroke-dasharray="4,2" marker-end="url(#arrow-dash)"/>
+
+  <!-- ============================================================ -->
+  <!-- 범례 -->
+  <!-- ============================================================ -->
+  <rect x="30" y="730" width="1340" height="48" rx="10" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="60" y="755" font-size="10" font-weight="600" fill="#475569">범례:</text>
+
+  <line x1="110" y1="752" x2="140" y2="752" stroke="#64748b" stroke-width="2"/>
+  <text x="147" y="757" font-size="10" fill="#64748b">필수 흐름</text>
+
+  <line x1="220" y1="752" x2="250" y2="752" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="257" y="757" font-size="10" fill="#64748b">선택 흐름</text>
+
+  <rect x="340" y="744" width="16" height="16" rx="4" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="363" y="757" font-size="10" fill="#3b82f6">Stage 1</text>
+
+  <rect x="420" y="744" width="16" height="16" rx="4" fill="#dcfce7" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="443" y="757" font-size="10" fill="#22c55e">Stage 2</text>
+
+  <rect x="500" y="744" width="16" height="16" rx="4" fill="#ffedd5" stroke="#f97316" stroke-width="1.5"/>
+  <text x="523" y="757" font-size="10" fill="#f97316">Stage 3</text>
+
+  <rect x="580" y="744" width="16" height="16" rx="4" fill="#ede9fe" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="603" y="757" font-size="10" fill="#8b5cf6">Stage 4</text>
+
+  <rect x="660" y="744" width="16" height="16" rx="10" fill="#fefce8" stroke="#eab308" stroke-width="1.5"/>
+  <text x="683" y="757" font-size="10" fill="#eab308">데이터 포맷</text>
+
+  <rect x="770" y="744" width="16" height="16" rx="4" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="793" y="757" font-size="10" fill="#94a3b8">인프라</text>
+
+  <!-- 기술 스택 태그 -->
+  <text x="900" y="757" font-size="10" font-weight="600" fill="#475569">Tech:</text>
+  <rect x="935" y="743" width="58" height="18" rx="9" fill="#dbeafe"/>
+  <text x="964" y="756" text-anchor="middle" font-size="9" fill="#1e40af">sqlglot</text>
+  <rect x="998" y="743" width="50" height="18" rx="9" fill="#dcfce7"/>
+  <text x="1023" y="756" text-anchor="middle" font-size="9" fill="#14532d">Claude</text>
+  <rect x="1053" y="743" width="48" height="18" rx="9" fill="#ffedd5"/>
+  <text x="1077" y="756" text-anchor="middle" font-size="9" fill="#7c2d12">Neo4j</text>
+  <rect x="1106" y="743" width="68" height="18" rx="9" fill="#ede9fe"/>
+  <text x="1140" y="756" text-anchor="middle" font-size="9" fill="#3b0764">Cytoscape.js</text>
+  <rect x="1179" y="743" width="55" height="18" rx="9" fill="#fff7ed"/>
+  <text x="1207" y="756" text-anchor="middle" font-size="9" fill="#7c2d12">FastAPI</text>
+  <rect x="1239" y="743" width="50" height="18" rx="9" fill="#f5f3ff"/>
+  <text x="1264" y="756" text-anchor="middle" font-size="9" fill="#3b0764">React</text>
+  <rect x="1294" y="743" width="50" height="18" rx="9" fill="#fef2f2"/>
+  <text x="1319" y="756" text-anchor="middle" font-size="9" fill="#991b1b">Docker</text>
+</svg>

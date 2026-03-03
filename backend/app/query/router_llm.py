@@ -1,4 +1,4 @@
-"""Stage 2: LLM-based query router (Claude Haiku).
+"""Stage 2: LLM-based query router (OpenAI).
 
 Falls back gracefully if API key is missing or call fails.
 """
@@ -110,38 +110,37 @@ _FEW_SHOT = [
 
 
 def classify_by_llm(question: str) -> RouteResult | None:
-    """Route a question using Claude Haiku.
+    """Route a question using OpenAI.
 
     Returns (template_id, route, slots, params) or None on failure.
     Non-fatal: logs warnings instead of raising.
     """
-    if not settings.anthropic_api_key:
+    if not settings.openai_api_key:
         logger.warning("LLM router skipped: no API key")
         return None
 
     try:
-        import anthropic
+        from openai import OpenAI
     except ImportError:
-        logger.warning("LLM router skipped: anthropic package not installed")
+        logger.warning("LLM router skipped: openai package not installed")
         return None
 
     system_prompt = _SYSTEM_PROMPT.format(templates=list_templates_for_prompt())
-    messages = _FEW_SHOT + [{"role": "user", "content": question}]
+    messages = [{"role": "system", "content": system_prompt}] + _FEW_SHOT + [{"role": "user", "content": question}]
 
     try:
-        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-        response = client.messages.create(
-            model=settings.anthropic_router_model,
+        client = OpenAI(api_key=settings.openai_api_key)
+        response = client.chat.completions.create(
+            model=settings.openai_router_model,
             max_tokens=1024,
             temperature=0,
-            system=system_prompt,
             messages=messages,
         )
     except Exception as e:
         logger.warning("LLM router API call failed: %s", e)
         return None
 
-    raw_text = response.content[0].text.strip()
+    raw_text = response.choices[0].message.content.strip()
 
     # Strip markdown fences if present
     if raw_text.startswith("```"):

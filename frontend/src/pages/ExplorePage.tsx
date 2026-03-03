@@ -6,6 +6,7 @@ import GraphFilterSidebar from '@/components/graph/GraphFilterSidebar';
 import NodeDetailPanel from '@/components/graph/NodeDetailPanel';
 import { useGraphData } from '@/components/graph/use-graph-data';
 import type { LayoutName } from '@/components/graph/graph-layouts';
+import { sendQuery } from '@/api/client';
 
 interface ExplorePageProps {
   onBack: () => void;
@@ -34,9 +35,13 @@ export default function ExplorePage({ onBack }: ExplorePageProps) {
     totalNodes,
     totalEdges,
     truncated,
+    highlightNodeIds,
+    setHighlightNodeIds,
   } = useGraphData(500);
 
   const [layout, setLayout] = useState<LayoutName>('cose');
+  const [demoQueryLoading, setDemoQueryLoading] = useState(false);
+  const [demoAnswer, setDemoAnswer] = useState<string | null>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
 
   const handleZoomIn = useCallback(() => {
@@ -79,6 +84,31 @@ export default function ExplorePage({ onBack }: ExplorePageProps) {
     },
     [rawNodes, setSelectedNode],
   );
+
+  const handleDemoQuestion = useCallback(
+    async (question: string) => {
+      setDemoQueryLoading(true);
+      setHighlightNodeIds(new Set());
+      setDemoAnswer(null);
+      try {
+        const res = await sendQuery(question, 'a');
+        setDemoAnswer(res.answer);
+        if (res.related_node_ids && res.related_node_ids.length > 0) {
+          setHighlightNodeIds(new Set(res.related_node_ids));
+        }
+      } catch {
+        setDemoAnswer('Query failed. Please try again.');
+      } finally {
+        setDemoQueryLoading(false);
+      }
+    },
+    [setHighlightNodeIds],
+  );
+
+  const handleClearDemo = useCallback(() => {
+    setHighlightNodeIds(new Set());
+    setDemoAnswer(null);
+  }, [setHighlightNodeIds]);
 
   if (loading) {
     return (
@@ -140,7 +170,22 @@ export default function ExplorePage({ onBack }: ExplorePageProps) {
         totalNodes={totalNodes}
         totalEdges={totalEdges}
         truncated={truncated}
+        onDemoQuestion={handleDemoQuestion}
+        demoQueryLoading={demoQueryLoading}
       />
+
+      {/* Demo answer banner */}
+      {demoAnswer && (
+        <div className="flex items-center gap-3 border-b bg-violet-50 px-4 py-2 text-sm">
+          <span className="flex-1 text-violet-900">{demoAnswer}</span>
+          <button
+            onClick={handleClearDemo}
+            className="text-violet-600 hover:text-violet-800 font-medium whitespace-nowrap"
+          >
+            Clear
+          </button>
+        </div>
+      )}
 
       {/* Main content area */}
       <div className="flex flex-1 overflow-hidden">
@@ -163,6 +208,7 @@ export default function ExplorePage({ onBack }: ExplorePageProps) {
               layout={layout}
               onNodeSelect={setSelectedNode}
               matchedNodeIds={matchedNodeIds}
+              highlightNodeIds={highlightNodeIds}
               visibleLabels={visibleLabels}
               cyRef={cyRef}
             />

@@ -69,6 +69,9 @@ def run_query(question: str, mode: str = "a") -> QueryResponse:
     # 5. Generate answer
     answer = _generate_answer(question, records, template_id, slots, params)
 
+    # 6. Extract related node IDs for graph highlighting
+    related_node_ids = _extract_related_node_ids(records, template_id, slots, params)
+
     latency_ms = int((time.time() - start_time) * 1000)
     return QueryResponse(
         question=question,
@@ -81,6 +84,7 @@ def run_query(question: str, mode: str = "a") -> QueryResponse:
         error=None,
         mode="a",
         latency_ms=latency_ms,
+        related_node_ids=related_node_ids,
     )
 
 
@@ -251,3 +255,94 @@ def _generate_answer(
 
     # Fallback: generic answer
     return f"조회 결과 {len(records)}건이 있습니다."
+
+
+def _extract_related_node_ids(
+    records: list[dict],
+    template_id: str,
+    slots: dict[str, str],
+    params: dict[str, object],
+) -> list[str]:
+    """Build a list of lookups from query results, then resolve to composite node IDs."""
+    # Each lookup: (label, property_name, values)
+    lookups: list[tuple[str, str, list[str]]] = []
+
+    if template_id == "two_hop":
+        # Anchor: start entity; Results: end entities
+        start_label = slots.get("start_label", "")
+        end_label = slots.get("end_label", "")
+        anchor_val = str(params.get("val", ""))
+        result_vals = [str(r.get("result", "")) for r in records if r.get("result")]
+        if start_label and anchor_val:
+            lookups.append((start_label, "name", [anchor_val]))
+        if end_label and result_vals:
+            lookups.append((end_label, "name", result_vals))
+
+    elif template_id == "custom_q2":
+        # Anchor: Customer; Results: Product + Category
+        anchor_name = str(params.get("name", ""))
+        if anchor_name:
+            lookups.append(("Customer", "name", [anchor_name]))
+        products = [str(r.get("product", "")) for r in records if r.get("product")]
+        categories = [str(r.get("category", "")) for r in records if r.get("category")]
+        if products:
+            lookups.append(("Product", "name", products))
+        if categories:
+            lookups.append(("Category", "name", categories))
+
+    elif template_id == "agg_with_rel":
+        # Results: end_label entities (categories)
+        end_label = slots.get("end_label", "Category")
+        cats = [str(r.get("category", "")) for r in records if r.get("category")]
+        if cats:
+            lookups.append((end_label, "name", cats))
+
+    elif template_id == "custom_q4":
+        # Two customers + common products
+        name1 = str(params.get("name1", ""))
+        name2 = str(params.get("name2", ""))
+        customers = [n for n in [name1, name2] if n]
+        if customers:
+            lookups.append(("Customer", "name", customers))
+        products = [str(r.get("product", "")) for r in records if r.get("product")]
+        if products:
+            lookups.append(("Product", "name", products))
+
+    elif template_id == "custom_q5":
+        # Aggregate query — no specific nodes
+        return []
+
+    else:
+        return []
+
+    if not lookups:
+        return []
+
+    return _batch_resolve_node_ids(lookups)
+
+
+def _batch_resolve_node_ids(
+    lookups: list[tuple[str, str, list[str]]],
+) -> list[str]:
+    """Resolve (label, prop, values) tuples to composite node IDs via Neo4j."""
+    try:
+        driver = GraphDatabase.driver(
+            settings.neo4j_uri,
+            auth=(settings.neo4j_user, settings.neo4j_password),
+        )
+        result_ids: list[str] = []
+        with driver.session() as session:
+            for label, prop, vals in lookups:
+                cypher = f"MATCH (n:{label}) WHERE n.{prop} IN $vals RETURN n.id AS nid"
+                records = session.run(cypher, vals=vals)
+                for rec in records:
+                    nid = rec.get("nid")
+                    if nid is not None:
+                        composite = f"{label}_{nid}"
+                        if composite not in result_ids:
+                            result_ids.append(composite)
+        driver.close()
+        return result_ids
+    except Exception as e:
+        logger.warning("Failed to resolve related node IDs: %s", e)
+        return []

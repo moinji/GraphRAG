@@ -21,13 +21,13 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 
-    # Anthropic
-    anthropic_api_key: str | None = None
-    anthropic_model: str = "claude-sonnet-4-20250514"
-    anthropic_router_model: str = "claude-haiku-4-5-20251001"
+    # OpenAI
+    openai_api_key: str | None = None
+    openai_model: str = "gpt-4o"
+    openai_router_model: str = "gpt-4o-mini"
 
     # B안 Local Search
-    local_search_model: str = "claude-sonnet-4-20250514"
+    local_search_model: str = "gpt-4o"
     local_search_max_tokens: int = 2048
     local_search_default_depth: int = 2
     local_search_max_nodes: int = 50

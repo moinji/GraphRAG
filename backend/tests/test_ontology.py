@@ -220,7 +220,7 @@ async def test_llm_skipped_no_key(api_client: AsyncClient, ecommerce_erd: ERDSch
     """#16: No API key → stage=fk_only, llm_diffs=[]."""
     body = {"erd": ecommerce_erd.model_dump(), "skip_llm": False}
     with (
-        patch("app.config.settings.anthropic_api_key", None),
+        patch("app.config.settings.openai_api_key", None),
         patch("app.ontology.pipeline.save_version", return_value=None),
     ):
         resp = await api_client.post("/api/v1/ontology/generate", json=body)

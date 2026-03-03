@@ -31,7 +31,7 @@ class OntologyGenerationError(Exception):
 
 
 class LLMEnrichmentError(Exception):
-    """Raised when Claude API call fails (non-fatal)."""
+    """Raised when OpenAI API call fails (non-fatal)."""
 
     def __init__(self, detail: str = "LLM enrichment failed"):
         self.detail = detail

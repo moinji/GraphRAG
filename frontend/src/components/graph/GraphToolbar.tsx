@@ -11,6 +11,14 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { LAYOUT_LABELS, type LayoutName } from './graph-layouts';
 
+const DEMO_QUESTIONS = [
+  { label: 'Q1', text: '고객 김민수가 주문한 상품은?' },
+  { label: 'Q2', text: '김민수가 주문한 상품과 같은 카테고리에서 리뷰 평점 Top 3 상품은?' },
+  { label: 'Q3', text: '가장 많이 팔린 카테고리 Top 3는?' },
+  { label: 'Q4', text: '김민수와 이영희가 공통으로 구매한 상품은?' },
+  { label: 'Q5', text: '쿠폰 사용 주문과 미사용 주문의 평균 금액 비교' },
+];
+
 interface GraphToolbarProps {
   searchTerm: string;
   onSearchChange: (term: string) => void;
@@ -22,6 +30,8 @@ interface GraphToolbarProps {
   totalNodes: number;
   totalEdges: number;
   truncated: boolean;
+  onDemoQuestion?: (question: string) => void;
+  demoQueryLoading?: boolean;
 }
 
 export default function GraphToolbar({
@@ -35,6 +45,8 @@ export default function GraphToolbar({
   totalNodes,
   totalEdges,
   truncated,
+  onDemoQuestion,
+  demoQueryLoading,
 }: GraphToolbarProps) {
   const [localSearch, setLocalSearch] = useState(searchTerm);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -55,6 +67,25 @@ export default function GraphToolbar({
         onChange={(e) => setLocalSearch(e.target.value)}
         className="w-56"
       />
+
+      {/* Demo Q&A dropdown */}
+      {onDemoQuestion && (
+        <Select
+          onValueChange={(v) => onDemoQuestion(v)}
+          disabled={demoQueryLoading}
+        >
+          <SelectTrigger className="w-56">
+            <SelectValue placeholder={demoQueryLoading ? "Loading..." : "Demo Q&A..."} />
+          </SelectTrigger>
+          <SelectContent>
+            {DEMO_QUESTIONS.map((q) => (
+              <SelectItem key={q.label} value={q.text}>
+                [{q.label}] {q.text}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
       {/* Layout selector */}
       <Select value={layout} onValueChange={(v) => onLayoutChange(v as LayoutName)}>

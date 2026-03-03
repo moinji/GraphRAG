@@ -169,6 +169,7 @@ export interface QueryResponse {
   llm_tokens_used: number | null;
   latency_ms: number | null;
   cached: boolean;
+  related_node_ids: string[];
 }
 
 export interface ChatMessage {

@@ -204,6 +204,7 @@ class QueryResponse(BaseModel):
     llm_tokens_used: int | None = None
     latency_ms: int | None = None
     cached: bool = False
+    related_node_ids: list[str] = []
 
 
 # ── QA Evaluation ────────────────────────────────────────────────

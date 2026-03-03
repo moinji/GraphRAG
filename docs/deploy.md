@@ -132,7 +132,7 @@ nano .env
 ```
 
 `.env` 파일에서 확인할 사항:
-- `ANTHROPIC_API_KEY`: Anthropic API 키 입력 (없으면 LLM 기능 제한)
+- `OPENAI_API_KEY`: OpenAI API 키 입력 (없으면 LLM 기능 제한)
 - DB 호스트가 컨테이너 이름으로 설정되어 있는지 확인 (`neo4j`, `postgres`, `redis`)
 
 ---

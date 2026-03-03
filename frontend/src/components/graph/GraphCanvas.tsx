@@ -11,6 +11,7 @@ interface GraphCanvasProps {
   layout: LayoutName;
   onNodeSelect: (node: GraphNode | null) => void;
   matchedNodeIds: Set<string>;
+  highlightNodeIds: Set<string>;
   visibleLabels: Set<string>;
   cyRef?: React.MutableRefObject<cytoscape.Core | null>;
 }
@@ -20,6 +21,7 @@ export default function GraphCanvas({
   layout,
   onNodeSelect,
   matchedNodeIds,
+  highlightNodeIds,
   visibleLabels,
   cyRef: externalCyRef,
 }: GraphCanvasProps) {
@@ -91,6 +93,30 @@ export default function GraphCanvas({
     }
   }, [matchedNodeIds, cyRef]);
 
+  // Highlight query-related nodes
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+
+    cy.nodes().removeClass('query-highlight');
+    if (highlightNodeIds.size > 0) {
+      for (const id of highlightNodeIds) {
+        const node = cy.getElementById(id);
+        if (node.length > 0) {
+          node.addClass('query-highlight');
+        }
+      }
+      // Fit view to all highlighted nodes
+      const highlighted = cy.nodes('.query-highlight');
+      if (highlighted.length > 0) {
+        cy.animate(
+          { fit: { eles: highlighted, padding: 60 } },
+          { duration: 500 },
+        );
+      }
+    }
+  }, [highlightNodeIds, cyRef]);
+
   const stylesheet = buildStylesheet(visibleLabels);
 
   const fullStylesheet = [
@@ -104,6 +130,17 @@ export default function GraphCanvas({
         'overlay-opacity': 0.2,
         width: 44,
         height: 44,
+      },
+    },
+    {
+      selector: 'node.query-highlight',
+      style: {
+        'border-width': 4,
+        'border-color': '#8b5cf6',
+        'overlay-color': '#8b5cf6',
+        'overlay-opacity': 0.2,
+        width: 48,
+        height: 48,
       },
     },
   ];

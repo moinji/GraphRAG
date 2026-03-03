@@ -1,4 +1,4 @@
-"""Stage 2: Claude API ontology enrichment."""
+"""Stage 2: OpenAI API ontology enrichment."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ def enrich_ontology(
     baseline: OntologySpec,
     erd_dict: dict[str, Any],
 ) -> tuple[OntologySpec, list[LLMEnrichmentDiff]]:
-    """Call Claude to enrich the baseline ontology.
+    """Call OpenAI to enrich the baseline ontology.
 
     Returns:
         Tuple of (enriched OntologySpec, list of diffs).
@@ -26,31 +26,30 @@ def enrich_ontology(
     Raises:
         LLMEnrichmentError: If API key is missing or API call fails.
     """
-    if not settings.anthropic_api_key:
-        raise LLMEnrichmentError("ANTHROPIC_API_KEY not configured")
+    if not settings.openai_api_key:
+        raise LLMEnrichmentError("OPENAI_API_KEY not configured")
 
     try:
-        import anthropic
+        from openai import OpenAI
     except ImportError:
-        raise LLMEnrichmentError("anthropic package not installed")
+        raise LLMEnrichmentError("openai package not installed")
 
     baseline_dict = baseline.model_dump()
     messages = build_enrichment_prompt(baseline_dict, erd_dict)
 
     try:
-        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-        response = client.messages.create(
-            model=settings.anthropic_model,
+        client = OpenAI(api_key=settings.openai_api_key)
+        response = client.chat.completions.create(
+            model=settings.openai_model,
             max_tokens=4096,
             temperature=0,
-            system=CORE_SYSTEM_PROMPT,
-            messages=messages,
+            messages=[{"role": "system", "content": CORE_SYSTEM_PROMPT}] + messages,
         )
     except Exception as e:
-        raise LLMEnrichmentError(f"Claude API call failed: {e}")
+        raise LLMEnrichmentError(f"OpenAI API call failed: {e}")
 
     # Extract text content
-    raw_text = response.content[0].text
+    raw_text = response.choices[0].message.content
 
     # Parse JSON from response (strip markdown fences if present)
     json_text = raw_text.strip()

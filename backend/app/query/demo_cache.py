@@ -31,6 +31,7 @@ _CACHE: dict[str, QueryResponse] = {
         mode="a",
         cached=True,
         latency_ms=0,
+        related_node_ids=["Customer_1", "Product_1", "Product_2", "Product_3"],
     ),
     "김민수가 주문한 상품과 같은 카테고리에서 리뷰 평점 Top 3 상품은?": QueryResponse(
         question="김민수가 주문한 상품과 같은 카테고리에서 리뷰 평점 Top 3 상품은?",
@@ -74,6 +75,7 @@ _CACHE: dict[str, QueryResponse] = {
         mode="a",
         cached=True,
         latency_ms=0,
+        related_node_ids=["Customer_1", "Product_7", "Product_2", "Product_6", "Category_4", "Category_5", "Category_6"],
     ),
     "가장 많이 팔린 카테고리 Top 3는?": QueryResponse(
         question="가장 많이 팔린 카테고리 Top 3는?",
@@ -94,6 +96,7 @@ _CACHE: dict[str, QueryResponse] = {
         mode="a",
         cached=True,
         latency_ms=0,
+        related_node_ids=["Category_4", "Category_5", "Category_6"],
     ),
     "김민수와 이영희가 공통으로 구매한 상품은?": QueryResponse(
         question="김민수와 이영희가 공통으로 구매한 상품은?",
@@ -112,6 +115,7 @@ _CACHE: dict[str, QueryResponse] = {
         mode="a",
         cached=True,
         latency_ms=0,
+        related_node_ids=["Customer_1", "Customer_2", "Product_1"],
     ),
     "쿠폰 사용 주문과 미사용 주문의 평균 금액 비교": QueryResponse(
         question="쿠폰 사용 주문과 미사용 주문의 평균 금액 비교",
@@ -134,6 +138,7 @@ _CACHE: dict[str, QueryResponse] = {
         mode="a",
         cached=True,
         latency_ms=0,
+        related_node_ids=[],
     ),
 }
 

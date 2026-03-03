@@ -166,7 +166,7 @@ def test_hybrid_llm_fallback():
         patch("app.query.router.settings") as mock_settings,
         patch("app.query.router.classify_by_llm", return_value=mock_result) as mock_llm,
     ):
-        mock_settings.anthropic_api_key = "test-key"
+        mock_settings.openai_api_key = "test-key"
         from app.query.router import route_question
 
         tid, route, slots, params, matched_by = route_question("김민수의 주소는 어디야?")
@@ -178,7 +178,7 @@ def test_hybrid_llm_fallback():
 def test_hybrid_no_key_unsupported():
     """#11: No API key + rules miss → unsupported."""
     with patch("app.query.router.settings") as mock_settings:
-        mock_settings.anthropic_api_key = None
+        mock_settings.openai_api_key = None
         from app.query.router import route_question
 
         tid, route, slots, params, matched_by = route_question("반품 정책은?")
@@ -214,7 +214,7 @@ async def test_query_api_success(api_client: AsyncClient):
 async def test_query_api_unsupported(api_client: AsyncClient):
     """#13: Unsupported question → 200 + error field."""
     with patch("app.query.router.settings") as mock_settings:
-        mock_settings.anthropic_api_key = None
+        mock_settings.openai_api_key = None
         resp = await api_client.post(
             "/api/v1/query",
             json={"question": "반품 정책은?"},

@@ -26,6 +26,8 @@ export interface UseGraphDataReturn {
   totalNodes: number;
   totalEdges: number;
   truncated: boolean;
+  highlightNodeIds: Set<string>;
+  setHighlightNodeIds: (ids: Set<string>) => void;
 }
 
 export function useGraphData(limit: number = 500): UseGraphDataReturn {
@@ -41,6 +43,7 @@ export function useGraphData(limit: number = 500): UseGraphDataReturn {
   const [totalNodes, setTotalNodes] = useState(0);
   const [totalEdges, setTotalEdges] = useState(0);
   const [truncated, setTruncated] = useState(false);
+  const [highlightNodeIds, setHighlightNodeIds] = useState<Set<string>>(new Set());
 
   // Derive all labels and edge types
   const allLabels = useMemo(() => {
@@ -224,5 +227,7 @@ export function useGraphData(limit: number = 500): UseGraphDataReturn {
     totalNodes,
     totalEdges,
     truncated,
+    highlightNodeIds,
+    setHighlightNodeIds,
   };
 }

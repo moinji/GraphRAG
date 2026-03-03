@@ -1,0 +1,157 @@
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "primaryColor": "#dbeafe",
+    "primaryBorderColor": "#3b82f6",
+    "secondaryColor": "#dcfce7",
+    "tertiaryColor": "#fef3c7",
+    "lineColor": "#64748b",
+    "fontSize": "14px"
+  }
+}}%%
+
+flowchart TB
+  %% ============================================================
+  %% STAGE 1 - 스키마 입력 및 파싱 (파랑)
+  %% ============================================================
+  subgraph S1["🔵 STAGE 1 · 스키마 입력 및 파싱"]
+    direction TB
+    USER_SQL[/"📄 .sql DDL 파일"/]
+    USER_CSV[/"📊 .csv 데이터 파일 (선택)"/]
+    PARSER["DDL Parser\n<small>sqlglot + regex</small>"]
+    ERD[("ERDSchema\n<small>테이블 · 컬럼 · FK</small>")]
+    CSV_PARSER["CSV Parser\n<small>유효성 검증 · 타입 변환</small>"]
+    CSV_SESSION[("CSV 세션\n<small>인메모리 저장</small>")]
+
+    USER_SQL --> PARSER
+    PARSER --> ERD
+    USER_CSV -.-> CSV_PARSER
+    CSV_PARSER -.-> CSV_SESSION
+  end
+
+  %% ============================================================
+  %% STAGE 2 - 온톨로지 생성 (초록)
+  %% ============================================================
+  subgraph S2["🟢 STAGE 2 · 온톨로지 자동 생성"]
+    direction TB
+    FK_ENGINE["FK Rule Engine\n<small>결정론적 규칙 매핑</small>\n\n• 테이블 → 노드 라벨\n• FK → 관계 타입\n• 조인테이블 → 관계 변환"]
+    BASELINE[("Baseline\nOntologySpec")]
+    LLM_ENRICH["LLM 보강\n<small>Claude API (선택)</small>\n\n• 관계 이름 개선\n• 의미적 관계 추가"]
+    EVAL["품질 평가\n<small>Golden Data 비교</small>"]
+    ONTO_SAVE[("OntologySpec\n<small>v1 · draft</small>")]
+
+    FK_ENGINE --> BASELINE
+    BASELINE --> LLM_ENRICH
+    LLM_ENRICH --> EVAL
+    EVAL --> ONTO_SAVE
+  end
+
+  %% ============================================================
+  %% STAGE 3 - 검토 및 KG 빌드 (주황)
+  %% ============================================================
+  subgraph S3["🟠 STAGE 3 · 검토 및 KG 빌드"]
+    direction TB
+    REVIEW["사용자 검토\n<small>노드/관계 편집 · Diff 확인</small>"]
+    APPROVE{{"✅ Approve"}}
+    BUILDER["KG Builder\n<small>백그라운드 태스크</small>\n\n1. 데이터 소스 결정\n2. FK 무결성 검증\n3. Neo4j MERGE 로드\n4. 카운트 검증"]
+    KG_DONE(("✓ Knowledge\nGraph 완성"))
+
+    REVIEW --> APPROVE
+    APPROVE --> BUILDER
+    BUILDER --> KG_DONE
+  end
+
+  %% ============================================================
+  %% STAGE 4 - 활용: 질의 + 시각화 (보라)
+  %% ============================================================
+  subgraph S4["🟣 STAGE 4 · 활용"]
+    direction TB
+
+    subgraph S4A["자연어 질의 (QueryPage)"]
+      direction TB
+      QUESTION[/"💬 사용자 질문"/]
+      MODE_A["Mode A · 템플릿 기반\n<small>규칙 매칭 → LLM 라우터\n→ Cypher 생성 → 실행</small>"]
+      MODE_B["Mode B · 로컬 서치\n<small>엔티티 추출 → 서브그래프\n→ Claude 답변 생성</small>"]
+      ANSWER[/"📝 답변 + 증거경로"/]
+
+      QUESTION --> MODE_A
+      QUESTION --> MODE_B
+      MODE_A --> ANSWER
+      MODE_B --> ANSWER
+    end
+
+    subgraph S4B["그래프 탐색 (ExplorePage)"]
+      direction TB
+      GRAPH_API["Graph API\n<small>/stats · /full · /neighbors</small>"]
+      CYTOSCAPE["Cytoscape.js\n<small>Canvas 렌더링</small>\n\n• 타입별 색상 · 필터\n• 검색 · 줌 · 레이아웃\n• 노드 클릭 → 상세 패널\n• Expand → 이웃 로드"]
+
+      GRAPH_API --> CYTOSCAPE
+    end
+  end
+
+  %% ============================================================
+  %% 인프라 레이어
+  %% ============================================================
+  subgraph INFRA["⚙️ 인프라 (Docker Compose)"]
+    direction LR
+    NEO4J[("🔷 Neo4j\n<small>그래프 DB\nBolt :7687</small>")]
+    PG[("🐘 PostgreSQL\n<small>메타데이터\n:5432</small>")]
+    REDIS[("🔴 Redis\n<small>캐시/세션\n:6379</small>")]
+    BACKEND["⚡ FastAPI\n<small>Backend\n:8000</small>"]
+    FRONTEND["🌐 React + Nginx\n<small>Frontend\n:80</small>"]
+  end
+
+  %% ============================================================
+  %% 스테이지 간 데이터 흐름
+  %% ============================================================
+  ERD -- "ERDSchema" --> FK_ENGINE
+  ONTO_SAVE -- "OntologySpec" --> REVIEW
+  CSV_SESSION -. "csv_session_id" .-> BUILDER
+  ERD -- "ERDSchema" --> BUILDER
+
+  KG_DONE -- "Graph Data" --> GRAPH_API
+  KG_DONE -- "Cypher 질의" --> MODE_A
+  KG_DONE -- "서브그래프" --> MODE_B
+
+  %% ============================================================
+  %% 인프라 연결 (점선)
+  %% ============================================================
+  BUILDER -. "MERGE" .-> NEO4J
+  MODE_A -. "Cypher" .-> NEO4J
+  MODE_B -. "서브그래프 탐색" .-> NEO4J
+  GRAPH_API -. "읽기" .-> NEO4J
+  EVAL -. "버전 저장" .-> PG
+  REVIEW -. "버전 조회/수정" .-> PG
+  CSV_SESSION -. "세션" .-> REDIS
+
+  %% ============================================================
+  %% 스타일
+  %% ============================================================
+  classDef stage1 fill:#dbeafe,stroke:#3b82f6,stroke-width:2px,color:#1e3a5f
+  classDef stage2 fill:#dcfce7,stroke:#22c55e,stroke-width:2px,color:#14532d
+  classDef stage3 fill:#ffedd5,stroke:#f97316,stroke-width:2px,color:#7c2d12
+  classDef stage4 fill:#ede9fe,stroke:#8b5cf6,stroke-width:2px,color:#3b0764
+  classDef infra fill:#f1f5f9,stroke:#94a3b8,stroke-width:2px,color:#334155
+  classDef data fill:#fefce8,stroke:#eab308,stroke-width:2px,color:#713f12
+  classDef action fill:#fce7f3,stroke:#ec4899,stroke-width:2px,color:#831843
+
+  class USER_SQL,USER_CSV,QUESTION,ANSWER stage1
+  class PARSER,CSV_PARSER stage1
+  class ERD,CSV_SESSION data
+  class FK_ENGINE,LLM_ENRICH,EVAL stage2
+  class BASELINE,ONTO_SAVE data
+  class REVIEW stage3
+  class APPROVE action
+  class BUILDER stage3
+  class KG_DONE action
+  class MODE_A,MODE_B stage4
+  class GRAPH_API,CYTOSCAPE stage4
+  class NEO4J,PG,REDIS,BACKEND,FRONTEND infra
+
+  style S1 fill:#eff6ff,stroke:#3b82f6,stroke-width:3px,rx:12
+  style S2 fill:#f0fdf4,stroke:#22c55e,stroke-width:3px,rx:12
+  style S3 fill:#fff7ed,stroke:#f97316,stroke-width:3px,rx:12
+  style S4 fill:#f5f3ff,stroke:#8b5cf6,stroke-width:3px,rx:12
+  style S4A fill:#faf5ff,stroke:#a78bfa,stroke-width:1px,rx:8
+  style S4B fill:#faf5ff,stroke:#a78bfa,stroke-width:1px,rx:8
+  style INFRA fill:#f8fafc,stroke:#94a3b8,stroke-width:3px,rx:12
