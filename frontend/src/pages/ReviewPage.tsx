@@ -3,13 +3,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import ModeToggle from '@/components/ModeToggle';
-import EvalCard from '@/components/EvalCard';
-import NodeTypeTable from '@/components/NodeTypeTable';
-import RelationshipTable from '@/components/RelationshipTable';
-import DiffPanel from '@/components/DiffPanel';
-import EditNodeDialog from '@/components/EditNodeDialog';
-import EditRelationshipDialog from '@/components/EditRelationshipDialog';
+import ModeToggle from '@/components/review/ModeToggle';
+import EvalCard from '@/components/review/EvalCard';
+import NodeTypeTable from '@/components/review/NodeTypeTable';
+import RelationshipTable from '@/components/review/RelationshipTable';
+import DiffPanel from '@/components/review/DiffPanel';
+import EditNodeDialog from '@/components/review/EditNodeDialog';
+import EditRelationshipDialog from '@/components/review/EditRelationshipDialog';
 import { updateVersion, approveVersion, startKGBuild, getKGBuildStatus, uploadCSVFiles } from '@/api/client';
 import type {
   CSVTableSummary,
