@@ -1,8 +1,8 @@
 """FK rule-based ontology engine: ERDSchema → OntologySpec.
 
-Fixed rules for the e-commerce PoC (no LLM).
-- 12 tables → 9 node types + 3 join-table relationships
-- 15 FKs → 12 relationship types
+Known tables use fixed rules (e-commerce PoC).
+Unknown tables are auto-mapped: table_name → PascalCase node label,
+FK columns → relationships with auto-generated names.
 """
 
 from __future__ import annotations
@@ -101,6 +101,25 @@ def _map_sql_type(sql_type: str) -> str:
     return SQL_TYPE_MAP.get(upper, "string")
 
 
+def _to_pascal_case(name: str) -> str:
+    """Convert snake_case table name to PascalCase label.
+
+    Examples: 'journal_entry' → 'JournalEntry', 'department' → 'Department'
+    """
+    return "".join(part.capitalize() for part in name.split("_"))
+
+
+def _auto_rel_name(source_label: str, target_label: str, fk_col: str) -> str:
+    """Generate a relationship name from FK column.
+
+    Examples: 'department_id' → 'HAS_DEPARTMENT', 'parent_id' → 'PARENT_OF'
+    """
+    col_base = fk_col.removesuffix("_id").upper()
+    if col_base == "PARENT":
+        return "PARENT_OF"
+    return f"HAS_{col_base}"
+
+
 def _fk_columns_for_table(
     table_name: str, foreign_keys: list[ForeignKey]
 ) -> set[str]:
@@ -113,16 +132,27 @@ def _fk_columns_for_table(
 
 
 def build_ontology(erd: ERDSchema) -> OntologySpec:
-    """Convert ERDSchema → OntologySpec using fixed FK rules."""
+    """Convert ERDSchema → OntologySpec using fixed FK rules.
+
+    Known e-commerce tables use hardcoded mappings.
+    Unknown tables are auto-mapped: table_name → PascalCase node label,
+    FK columns → auto-named relationships.
+    """
     table_map = {t.name: t for t in erd.tables}
     node_types: list[NodeType] = []
     relationship_types: list[RelationshipType] = []
 
-    # ── 1. Node types (9 tables that are NOT join tables) ──────────
+    # Build a unified label map: known tables + auto-mapped unknown tables
+    label_map: dict[str, str] = dict(TABLE_TO_LABEL)
+    for table in erd.tables:
+        if table.name not in label_map and table.name not in JOIN_TABLE_CONFIG:
+            label_map[table.name] = _to_pascal_case(table.name)
+
+    # ── 1. Node types ─────────────────────────────────────────────
     for table in erd.tables:
         if table.name in JOIN_TABLE_CONFIG:
             continue
-        label = TABLE_TO_LABEL.get(table.name)
+        label = label_map.get(table.name)
         if label is None:
             continue
 
@@ -144,23 +174,59 @@ def build_ontology(erd: ERDSchema) -> OntologySpec:
             properties=props,
         ))
 
-    # ── 2. Direct FK relationships (9) ─────────────────────────────
+    # ── 2. Direct FK relationships ────────────────────────────────
     for fk in erd.foreign_keys:
         key = (fk.source_table, fk.source_column)
-        if key not in DIRECTION_MAP:
-            continue  # belongs to a join table, handled below
-        src_label, rel_name, tgt_label, src_key, tgt_key = DIRECTION_MAP[key]
-        relationship_types.append(RelationshipType(
-            name=rel_name,
-            source_node=src_label,
-            target_node=tgt_label,
-            data_table=fk.source_table,
-            source_key_column=src_key,
-            target_key_column=tgt_key,
-            derivation="fk_direct",
-        ))
 
-    # ── 3. Join-table relationships (3) ────────────────────────────
+        # Try hardcoded mapping first
+        if key in DIRECTION_MAP:
+            src_label, rel_name, tgt_label, src_key, tgt_key = DIRECTION_MAP[key]
+            relationship_types.append(RelationshipType(
+                name=rel_name,
+                source_node=src_label,
+                target_node=tgt_label,
+                data_table=fk.source_table,
+                source_key_column=src_key,
+                target_key_column=tgt_key,
+                derivation="fk_direct",
+            ))
+            continue
+
+        # Skip join table FKs (handled below)
+        if fk.source_table in JOIN_TABLE_CONFIG:
+            continue
+
+        # Auto-map: FK-owning table → target table
+        src_label = label_map.get(fk.source_table)
+        tgt_label = label_map.get(fk.target_table)
+        if src_label is None or tgt_label is None:
+            continue
+
+        # Self-referential FK (e.g. parent_id)
+        if fk.source_table == fk.target_table:
+            rel_name = _auto_rel_name(src_label, tgt_label, fk.source_column)
+            relationship_types.append(RelationshipType(
+                name=rel_name,
+                source_node=src_label,
+                target_node=tgt_label,
+                data_table=fk.source_table,
+                source_key_column=fk.source_column,
+                target_key_column="id",
+                derivation="fk_direct",
+            ))
+        else:
+            rel_name = _auto_rel_name(src_label, tgt_label, fk.source_column)
+            relationship_types.append(RelationshipType(
+                name=rel_name,
+                source_node=src_label,
+                target_node=tgt_label,
+                data_table=fk.source_table,
+                source_key_column="id",
+                target_key_column=fk.source_column,
+                derivation="fk_direct",
+            ))
+
+    # ── 3. Join-table relationships ───────────────────────────────
     for jt_name, cfg in JOIN_TABLE_CONFIG.items():
         jt = table_map.get(jt_name)
         if jt is None:
@@ -172,10 +238,15 @@ def build_ontology(erd: ERDSchema) -> OntologySpec:
             if fk.source_table == jt_name:
                 fk_map[fk.source_column] = fk
 
-        src_fk = fk_map[cfg["source_fk_col"]]
-        tgt_fk = fk_map[cfg["target_fk_col"]]
-        src_label = TABLE_TO_LABEL[src_fk.target_table]
-        tgt_label = TABLE_TO_LABEL[tgt_fk.target_table]
+        src_fk = fk_map.get(cfg["source_fk_col"])
+        tgt_fk = fk_map.get(cfg["target_fk_col"])
+        if src_fk is None or tgt_fk is None:
+            continue
+
+        src_label = label_map.get(src_fk.target_table)
+        tgt_label = label_map.get(tgt_fk.target_table)
+        if src_label is None or tgt_label is None:
+            continue
 
         # Build relationship properties from non-FK, non-PK columns
         rel_props: list[RelProperty] = []
