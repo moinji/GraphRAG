@@ -7,7 +7,11 @@ import NodeDetailPanel from '@/components/graph/NodeDetailPanel';
 import { useGraphData } from '@/components/graph/use-graph-data';
 import type { LayoutName } from '@/components/graph/graph-layouts';
 
-export default function ExplorePage() {
+interface ExplorePageProps {
+  onBack: () => void;
+}
+
+export default function ExplorePage({ onBack }: ExplorePageProps) {
   const {
     elements,
     stats,
@@ -117,6 +121,14 @@ export default function ExplorePage() {
   return (
     <div className="flex h-[calc(100vh-57px)] flex-col">
       {/* Toolbar */}
+      <div className="flex items-center gap-2 px-3 pt-2">
+        <button
+          onClick={onBack}
+          className="text-sm text-muted-foreground hover:text-foreground"
+        >
+          &larr; Back
+        </button>
+      </div>
       <GraphToolbar
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}

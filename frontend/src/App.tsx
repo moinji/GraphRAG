@@ -9,6 +9,7 @@ type Page = 'upload' | 'review' | 'query' | 'explore';
 
 function App() {
   const [page, setPage] = useState<Page>('upload');
+  const [prevPage, setPrevPage] = useState<Page>('upload');
   const [generateResult, setGenerateResult] = useState<OntologyGenerateResponse | null>(null);
   const [erd, setErd] = useState<ERDSchema | null>(null);
 
@@ -47,7 +48,10 @@ function App() {
               </button>
             )}
             <button
-              onClick={() => setPage('explore')}
+              onClick={() => {
+                setPrevPage(page);
+                setPage('explore');
+              }}
               className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                 page === 'explore'
                   ? 'bg-primary text-primary-foreground'
@@ -65,7 +69,7 @@ function App() {
           <ReviewPage result={generateResult} erd={erd} onGoToQuery={handleGoToQuery} />
         )}
         {page === 'query' && <QueryPage onBack={handleBackToReview} />}
-        {page === 'explore' && <ExplorePage />}
+        {page === 'explore' && <ExplorePage onBack={() => setPage(prevPage)} />}
       </main>
     </div>
   );
