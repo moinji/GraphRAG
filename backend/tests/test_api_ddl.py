@@ -26,8 +26,8 @@ async def client(app):
 async def test_upload_valid_ddl(client: AsyncClient):
     from pathlib import Path
 
-    ddl_bytes = Path(__file__).resolve().parent.parent.joinpath(
-        "demo_ecommerce.sql"
+    ddl_bytes = Path(__file__).resolve().parent.parent.parent.joinpath(
+        "examples", "schemas", "demo_ecommerce.sql"
     ).read_bytes()
 
     resp = await client.post(

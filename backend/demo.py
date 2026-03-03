@@ -41,7 +41,7 @@ def main():
     neo4j_user = os.getenv("NEO4J_USER", "neo4j")
     neo4j_password = os.getenv("NEO4J_PASSWORD", "password123")
 
-    ddl_path = Path(__file__).resolve().parent / "demo_ecommerce.sql"
+    ddl_path = Path(__file__).resolve().parent.parent / "examples" / "schemas" / "demo_ecommerce.sql"
 
     # ── Step 1: DDL Parsing ────────────────────────────────────────
     _sep("Step 1: DDL Parsing")

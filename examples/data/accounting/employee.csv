@@ -1,0 +1,13 @@
+id,name,email,position,department_id
+1,김재현,jaehyun.kim@company.co.kr,부장,5
+2,박소영,soyoung.park@company.co.kr,과장,5
+3,이동훈,donghoon.lee@company.co.kr,대리,5
+4,정미선,misun.jung@company.co.kr,부장,4
+5,최원석,wonseok.choi@company.co.kr,팀장,7
+6,한지수,jisoo.han@company.co.kr,대리,7
+7,오승현,seunghyun.oh@company.co.kr,팀장,9
+8,윤서연,seoyeon.yoon@company.co.kr,사원,5
+9,임태호,taeho.lim@company.co.kr,과장,8
+10,송민지,minji.song@company.co.kr,부장,6
+11,강현우,hyunwoo.kang@company.co.kr,팀장,10
+12,조아름,areum.jo@company.co.kr,대리,9

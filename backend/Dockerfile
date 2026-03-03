@@ -11,7 +11,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/app ./app
-COPY backend/demo_ecommerce.sql ./demo_ecommerce.sql
+COPY examples/schemas/demo_ecommerce.sql ./demo_ecommerce.sql
 
 EXPOSE 8000
 

@@ -35,7 +35,7 @@ async def api_client(_app):
 def ecommerce_ddl():
     from pathlib import Path
 
-    ddl_path = Path(__file__).resolve().parent.parent / "demo_ecommerce.sql"
+    ddl_path = Path(__file__).resolve().parent.parent.parent / "examples" / "schemas" / "demo_ecommerce.sql"
     return ddl_path.read_text(encoding="utf-8")
 
 

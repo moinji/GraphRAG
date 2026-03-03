@@ -15,7 +15,7 @@ from app.main import create_app  # noqa: E402
 from app.ddl_parser.parser import parse_ddl  # noqa: E402
 from app.models.schemas import ERDSchema  # noqa: E402
 
-ECOMMERCE_DDL_PATH = Path(__file__).resolve().parent.parent / "demo_ecommerce.sql"
+ECOMMERCE_DDL_PATH = Path(__file__).resolve().parent.parent.parent / "examples" / "schemas" / "demo_ecommerce.sql"
 ECOMMERCE_DDL = ECOMMERCE_DDL_PATH.read_text(encoding="utf-8")
 
 
