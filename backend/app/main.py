@@ -94,6 +94,15 @@ def create_app() -> FastAPI:
         except Exception:
             logger.warning("PG migrations failed at startup", exc_info=True)
 
+    @application.on_event("shutdown")
+    def _shutdown_close_neo4j() -> None:
+        try:
+            from app.db.neo4j_client import close_driver
+
+            close_driver()
+        except Exception:
+            logger.warning("Neo4j driver close failed at shutdown", exc_info=True)
+
     return application
 
 

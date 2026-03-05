@@ -68,17 +68,17 @@ export default function EditNodeDialog({ node, open, onClose, onSave }: EditNode
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{node ? 'Edit Node Type' : 'Add Node Type'}</DialogTitle>
+          <DialogTitle>{node ? '노드 타입 수정' : '노드 타입 추가'}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Name (PascalCase)</Label>
+              <Label>이름 (PascalCase)</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Customer" />
             </div>
             <div className="space-y-2">
-              <Label>Source Table</Label>
+              <Label>원본 테이블</Label>
               <Input
                 value={sourceTable}
                 onChange={(e) => setSourceTable(e.target.value)}
@@ -90,23 +90,23 @@ export default function EditNodeDialog({ node, open, onClose, onSave }: EditNode
           {/* Properties sub-table */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Properties</Label>
+              <Label>속성 (Properties)</Label>
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => setProperties((prev) => [...prev, emptyProp()])}
               >
-                + Add Property
+                + 속성 추가
               </Button>
             </div>
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Source Column</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className="text-center">Key</TableHead>
+                    <TableHead>이름</TableHead>
+                    <TableHead>소스 컬럼</TableHead>
+                    <TableHead>타입</TableHead>
+                    <TableHead className="text-center">키</TableHead>
                     <TableHead />
                   </TableRow>
                 </TableHeader>
@@ -114,7 +114,7 @@ export default function EditNodeDialog({ node, open, onClose, onSave }: EditNode
                   {properties.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center text-muted-foreground text-sm">
-                        No properties.
+                        속성 없음
                       </TableCell>
                     </TableRow>
                   )}
@@ -170,10 +170,10 @@ export default function EditNodeDialog({ node, open, onClose, onSave }: EditNode
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            취소
           </Button>
           <Button onClick={handleSave} disabled={!name.trim() || !sourceTable.trim()}>
-            Save
+            저장
           </Button>
         </DialogFooter>
       </DialogContent>

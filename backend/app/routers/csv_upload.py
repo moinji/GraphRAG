@@ -27,18 +27,24 @@ async def upload_csv(
     # Parse ERD from JSON string
     try:
         erd_dict = json.loads(erd_json)
-        erd = ERDSchema(**erd_dict)
-    except (json.JSONDecodeError, Exception) as e:
+    except json.JSONDecodeError as e:
         raise CSVValidationError(
             detail="Invalid ERD JSON",
+            errors=[str(e)],
+        )
+    try:
+        erd = ERDSchema(**erd_dict)
+    except (ValueError, TypeError) as e:
+        raise CSVValidationError(
+            detail="Invalid ERD schema",
             errors=[str(e)],
         )
 
     # Validate file count
     if len(files) > settings.csv_max_files:
         raise CSVValidationError(
-            detail=f"Too many files (max {settings.csv_max_files})",
-            errors=[f"Uploaded {len(files)} files, maximum is {settings.csv_max_files}"],
+            detail=f"파일이 너무 많습니다 (최대 {settings.csv_max_files}개)",
+            errors=[f"업로드된 파일 {len(files)}개, 최대 {settings.csv_max_files}개"],
         )
 
     # Read all files
@@ -57,18 +63,21 @@ async def upload_csv(
         files_data.append((f.filename or "unknown.csv", content))
 
     # Parse and validate
-    data, summaries, errors = parse_csv_files(files_data, erd)
+    data, summaries, errors, warnings = parse_csv_files(files_data, erd)
 
-    if errors:
+    # 유효한 파일이 0개 → 진짜 실패
+    if not data:
         raise CSVValidationError(
             detail="CSV validation failed",
             errors=errors,
         )
 
-    # Store in session
+    # 유효한 파일이 1개라도 있으면 부분 성공 (errors + warnings를 응답에 포함)
     session_id = create_session(data)
 
     return CSVUploadResponse(
         csv_session_id=session_id,
         tables=summaries,
+        errors=errors,
+        warnings=warnings,
     )

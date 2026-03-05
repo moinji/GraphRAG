@@ -1,0 +1,321 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 2560" font-family="'Segoe UI', 'Noto Sans KR', Arial, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="12" markerHeight="8" orient="auto-start-reverse">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+    </marker>
+    <marker id="arr-dash" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="12" markerHeight="8" orient="auto-start-reverse">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8"/>
+    </marker>
+    <filter id="sh" x="-2%" y="-2%" width="104%" height="108%">
+      <feDropShadow dx="1" dy="2" stdDeviation="3" flood-opacity="0.10"/>
+    </filter>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fafbfd"/>
+      <stop offset="100%" stop-color="#f0f2f7"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 배경 -->
+  <rect width="800" height="2560" fill="url(#bg)" rx="18"/>
+
+  <!-- ===== 제목 ===== -->
+  <text x="400" y="48" text-anchor="middle" font-size="24" font-weight="800" fill="#1e293b">GraphRAG 사용 가이드</text>
+  <text x="400" y="74" text-anchor="middle" font-size="15" fill="#475569">6단계로 데이터에서 답까지</text>
+  <text x="400" y="96" text-anchor="middle" font-size="12" fill="#8b5cf6">http://35.216.107.229 에서 직접 체험하세요</text>
+
+  <!-- ================================================================ -->
+  <!-- STEP 1 — SQL 파일 업로드 (파란색) -->
+  <!-- ================================================================ -->
+  <rect x="60" y="120" width="680" height="260" rx="16" fill="#eff6ff" stroke="#3b82f6" stroke-width="2" filter="url(#sh)"/>
+  <!-- 헤더 바 -->
+  <rect x="60" y="120" width="680" height="44" rx="16" fill="#3b82f6"/>
+  <rect x="60" y="148" width="680" height="16" fill="#3b82f6"/>
+  <!-- 번호 원 -->
+  <circle cx="92" cy="142" r="15" fill="white"/>
+  <text x="92" y="148" text-anchor="middle" font-size="14" font-weight="800" fill="#3b82f6">1</text>
+  <!-- 아이콘 + 제목 -->
+  <text x="120" y="148" font-size="16" font-weight="700" fill="white">📄  SQL 파일 업로드</text>
+
+  <!-- 무엇을 하나요? -->
+  <text x="90" y="190" font-size="13" font-weight="700" fill="#1e3a5f">무엇을 하나요?</text>
+  <text x="90" y="210" font-size="12" fill="#334155">데이터베이스 설계 파일(.sql)을 선택하고 Upload 버튼을 누릅니다.</text>
+  <text x="90" y="228" font-size="11" fill="#64748b">드래그 앤 드롭 또는 파일 선택 모두 가능합니다.</text>
+
+  <!-- 화면에서 보이는 것 — 미니카드 -->
+  <text x="90" y="256" font-size="13" font-weight="700" fill="#1e3a5f">화면에서 보이는 것</text>
+  <rect x="90" y="264" width="110" height="28" rx="6" fill="#dbeafe" stroke="#93c5fd" stroke-width="1"/>
+  <text x="145" y="283" text-anchor="middle" font-size="11" font-weight="600" fill="#1e40af">파일 선택 버튼</text>
+  <rect x="210" y="264" width="90" height="28" rx="6" fill="#dbeafe" stroke="#93c5fd" stroke-width="1"/>
+  <text x="255" y="283" text-anchor="middle" font-size="11" font-weight="600" fill="#1e40af">Upload</text>
+  <rect x="310" y="264" width="140" height="28" rx="6" fill="#dbeafe" stroke="#93c5fd" stroke-width="1"/>
+  <text x="380" y="283" text-anchor="middle" font-size="11" font-weight="600" fill="#1e40af">ERD Summary</text>
+
+  <!-- 결과 -->
+  <text x="90" y="314" font-size="13" font-weight="700" fill="#1e3a5f">결과</text>
+  <rect x="90" y="322" width="620" height="36" rx="8" fill="white" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="400" y="345" text-anchor="middle" font-size="12" font-weight="600" fill="#1e40af">테이블 목록 · 컬럼 정보 · 테이블 간 관계(FK)를 자동으로 추출</text>
+
+  <!-- ===== 화살표 1→2 ===== -->
+  <line x1="400" y1="380" x2="400" y2="410" stroke="#64748b" stroke-width="2" marker-end="url(#arr)"/>
+  <rect x="350" y="384" width="100" height="18" rx="4" fill="white" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="400" y="397" text-anchor="middle" font-size="10" font-weight="600" fill="#64748b">자동 분석</text>
+
+  <!-- ================================================================ -->
+  <!-- STEP 2 — 온톨로지 자동 생성 (초록색) -->
+  <!-- ================================================================ -->
+  <rect x="60" y="416" width="680" height="280" rx="16" fill="#f0fdf4" stroke="#22c55e" stroke-width="2" filter="url(#sh)"/>
+  <rect x="60" y="416" width="680" height="44" rx="16" fill="#22c55e"/>
+  <rect x="60" y="444" width="680" height="16" fill="#22c55e"/>
+  <circle cx="92" cy="438" r="15" fill="white"/>
+  <text x="92" y="444" text-anchor="middle" font-size="14" font-weight="800" fill="#22c55e">2</text>
+  <text x="120" y="444" font-size="16" font-weight="700" fill="white">🧠  온톨로지 자동 생성</text>
+
+  <text x="90" y="486" font-size="13" font-weight="700" fill="#14532d">무엇을 하나요?</text>
+  <text x="90" y="506" font-size="12" fill="#334155">"Generate Ontology" 버튼을 클릭합니다.</text>
+  <text x="90" y="524" font-size="11" fill="#64748b">선택: "Include LLM enrichment" 체크 시 AI가 관계를 추가로 보강합니다.</text>
+
+  <text x="90" y="552" font-size="13" font-weight="700" fill="#14532d">화면에서 보이는 것</text>
+  <rect x="90" y="560" width="155" height="28" rx="6" fill="#dcfce7" stroke="#86efac" stroke-width="1"/>
+  <text x="167" y="579" text-anchor="middle" font-size="11" font-weight="600" fill="#14532d">Generate Ontology</text>
+  <rect x="255" y="560" width="155" height="28" rx="6" fill="#dcfce7" stroke="#86efac" stroke-width="1" stroke-dasharray="4,2"/>
+  <text x="332" y="579" text-anchor="middle" font-size="11" font-weight="600" fill="#14532d">LLM 체크박스 (선택)</text>
+
+  <!-- 온톨로지 = 설명 -->
+  <rect x="90" y="600" width="620" height="30" rx="8" fill="#fefce8" stroke="#eab308" stroke-width="1"/>
+  <text x="400" y="620" text-anchor="middle" font-size="11" fill="#854d0e">💡 온톨로지 = "데이터들이 어떻게 연결되는지 정리한 지도"</text>
+
+  <text x="90" y="652" font-size="13" font-weight="700" fill="#14532d">결과</text>
+  <rect x="90" y="660" width="620" height="28" rx="8" fill="white" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="400" y="679" text-anchor="middle" font-size="12" font-weight="600" fill="#14532d">테이블 → 노드 타입, 관계(FK) → 연결 타입으로 자동 변환 완료</text>
+
+  <!-- ===== 화살표 2→3 ===== -->
+  <line x1="400" y1="696" x2="400" y2="726" stroke="#64748b" stroke-width="2" marker-end="url(#arr)"/>
+  <rect x="358" y="700" width="84" height="18" rx="4" fill="white" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="400" y="713" text-anchor="middle" font-size="10" font-weight="600" fill="#64748b">클릭</text>
+
+  <!-- ================================================================ -->
+  <!-- STEP 3 — 검토 & 승인 (주황색) -->
+  <!-- ================================================================ -->
+  <rect x="60" y="732" width="680" height="310" rx="16" fill="#fff7ed" stroke="#f97316" stroke-width="2" filter="url(#sh)"/>
+  <rect x="60" y="732" width="680" height="44" rx="16" fill="#f97316"/>
+  <rect x="60" y="760" width="680" height="16" fill="#f97316"/>
+  <circle cx="92" cy="754" r="15" fill="white"/>
+  <text x="92" y="760" text-anchor="middle" font-size="14" font-weight="800" fill="#f97316">3</text>
+  <text x="120" y="760" font-size="16" font-weight="700" fill="white">✅  검토 &amp; 승인</text>
+
+  <text x="90" y="800" font-size="13" font-weight="700" fill="#7c2d12">무엇을 하나요?</text>
+  <text x="90" y="820" font-size="12" fill="#334155">자동 생성된 노드와 관계를 확인합니다.</text>
+  <text x="90" y="838" font-size="11" fill="#64748b">필요하면 수정/추가/삭제 후 "Approve" 버튼을 눌러 최종 승인합니다.</text>
+
+  <text x="90" y="866" font-size="13" font-weight="700" fill="#7c2d12">화면에서 보이는 것</text>
+  <!-- 탭 미니카드 -->
+  <rect x="90" y="876" width="80" height="26" rx="6" fill="#ffedd5" stroke="#fdba74" stroke-width="1"/>
+  <text x="130" y="894" text-anchor="middle" font-size="10" font-weight="600" fill="#7c2d12">Nodes 탭</text>
+  <rect x="178" y="876" width="115" height="26" rx="6" fill="#ffedd5" stroke="#fdba74" stroke-width="1"/>
+  <text x="235" y="894" text-anchor="middle" font-size="10" font-weight="600" fill="#7c2d12">Relationships 탭</text>
+  <rect x="301" y="876" width="100" height="26" rx="6" fill="#ffedd5" stroke="#fdba74" stroke-width="1"/>
+  <text x="351" y="894" text-anchor="middle" font-size="10" font-weight="600" fill="#7c2d12">Changes 탭</text>
+  <rect x="409" y="876" width="65" height="26" rx="6" fill="#ffedd5" stroke="#fdba74" stroke-width="1"/>
+  <text x="441" y="894" text-anchor="middle" font-size="10" font-weight="600" fill="#7c2d12">Save</text>
+  <rect x="482" y="876" width="80" height="26" rx="6" fill="#f97316"/>
+  <text x="522" y="894" text-anchor="middle" font-size="10" font-weight="700" fill="white">Approve</text>
+
+  <!-- 두 모드 설명 -->
+  <rect x="90" y="914" width="295" height="40" rx="8" fill="white" stroke="#f97316" stroke-width="1"/>
+  <text x="237" y="932" text-anchor="middle" font-size="11" font-weight="600" fill="#7c2d12">Auto 모드 — 바로 승인</text>
+  <text x="237" y="946" text-anchor="middle" font-size="10" fill="#a8a29e">빠르게 진행하고 싶을 때</text>
+  <rect x="400" y="914" width="295" height="40" rx="8" fill="white" stroke="#f97316" stroke-width="1"/>
+  <text x="547" y="932" text-anchor="middle" font-size="11" font-weight="600" fill="#7c2d12">Review 모드 — 직접 검토 후 승인</text>
+  <text x="547" y="946" text-anchor="middle" font-size="10" fill="#a8a29e">꼼꼼하게 확인하고 싶을 때</text>
+
+  <text x="90" y="978" font-size="13" font-weight="700" fill="#7c2d12">결과</text>
+  <rect x="90" y="986" width="620" height="36" rx="8" fill="white" stroke="#f97316" stroke-width="1.5"/>
+  <text x="400" y="1003" text-anchor="middle" font-size="12" font-weight="600" fill="#7c2d12">상태가 "draft" → "approved"로 변경 (승인 후 잠금🔒)</text>
+  <text x="400" y="1017" text-anchor="middle" font-size="10" fill="#a8a29e">AI가 만든 결과를 사람이 확인하고 최종 승인합니다</text>
+
+  <!-- ===== 화살표 3→4 (점선, 선택) ===== -->
+  <line x1="400" y1="1042" x2="400" y2="1072" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6,3" marker-end="url(#arr-dash)"/>
+  <rect x="350" y="1046" width="100" height="18" rx="4" fill="white" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="400" y="1059" text-anchor="middle" font-size="10" font-weight="600" fill="#94a3b8">선택 사항</text>
+
+  <!-- ================================================================ -->
+  <!-- STEP 4 — 실제 데이터 연결 (노란색, 점선) -->
+  <!-- ================================================================ -->
+  <rect x="60" y="1078" width="680" height="260" rx="16" fill="#fefce8" stroke="#eab308" stroke-width="2" stroke-dasharray="8,4" filter="url(#sh)"/>
+  <rect x="60" y="1078" width="680" height="44" rx="16" fill="#eab308"/>
+  <rect x="60" y="1106" width="680" height="16" fill="#eab308"/>
+  <circle cx="92" cy="1100" r="15" fill="white"/>
+  <text x="92" y="1106" text-anchor="middle" font-size="14" font-weight="800" fill="#eab308">4</text>
+  <text x="120" y="1106" font-size="16" font-weight="700" fill="white">📊  실제 데이터 연결 (선택)</text>
+
+  <text x="90" y="1146" font-size="13" font-weight="700" fill="#854d0e">무엇을 하나요?</text>
+  <text x="90" y="1166" font-size="12" fill="#334155">CSV 파일들을 업로드하여 실제 데이터를 연결합니다.</text>
+  <text x="90" y="1184" font-size="11" fill="#64748b">승인(Approve) 후에 나타나는 "CSV Data" 섹션에서 업로드합니다.</text>
+
+  <text x="90" y="1212" font-size="13" font-weight="700" fill="#854d0e">화면에서 보이는 것</text>
+  <rect x="90" y="1220" width="110" height="28" rx="6" fill="#fef9c3" stroke="#fde047" stroke-width="1"/>
+  <text x="145" y="1239" text-anchor="middle" font-size="11" font-weight="600" fill="#854d0e">CSV 파일 선택</text>
+  <rect x="210" y="1220" width="160" height="28" rx="6" fill="#fef9c3" stroke="#fde047" stroke-width="1"/>
+  <text x="290" y="1239" text-anchor="middle" font-size="11" font-weight="600" fill="#854d0e">테이블별 행 수 뱃지</text>
+
+  <!-- 분기 설명 -->
+  <rect x="90" y="1262" width="295" height="36" rx="8" fill="white" stroke="#eab308" stroke-width="1"/>
+  <text x="237" y="1281" text-anchor="middle" font-size="11" fill="#854d0e">✓ CSV 있으면 → 내 데이터로 구축</text>
+  <rect x="400" y="1262" width="295" height="36" rx="8" fill="white" stroke="#eab308" stroke-width="1"/>
+  <text x="547" y="1281" text-anchor="middle" font-size="11" fill="#854d0e">✗ CSV 없으면 → 샘플 데이터로 체험</text>
+
+  <text x="90" y="1316" font-size="13" font-weight="700" fill="#854d0e">결과</text>
+  <text x="90" y="1332" font-size="12" font-weight="600" fill="#854d0e">지식그래프에 넣을 데이터 준비 완료</text>
+
+  <!-- ===== 화살표 4→5 ===== -->
+  <line x1="400" y1="1338" x2="400" y2="1368" stroke="#64748b" stroke-width="2" marker-end="url(#arr)"/>
+  <rect x="358" y="1342" width="84" height="18" rx="4" fill="white" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="400" y="1355" text-anchor="middle" font-size="10" font-weight="600" fill="#64748b">클릭</text>
+
+  <!-- ================================================================ -->
+  <!-- STEP 5 — 지식그래프 구축 (빨간색) -->
+  <!-- ================================================================ -->
+  <rect x="60" y="1374" width="680" height="280" rx="16" fill="#fef2f2" stroke="#ef4444" stroke-width="2" filter="url(#sh)"/>
+  <rect x="60" y="1374" width="680" height="44" rx="16" fill="#ef4444"/>
+  <rect x="60" y="1402" width="680" height="16" fill="#ef4444"/>
+  <circle cx="92" cy="1396" r="15" fill="white"/>
+  <text x="92" y="1402" text-anchor="middle" font-size="14" font-weight="800" fill="#ef4444">5</text>
+  <text x="120" y="1402" font-size="16" font-weight="700" fill="white">🔨  지식그래프 구축</text>
+
+  <text x="90" y="1442" font-size="13" font-weight="700" fill="#991b1b">무엇을 하나요?</text>
+  <text x="90" y="1462" font-size="12" fill="#334155">"Build KG" 버튼을 클릭하면 자동으로 진행됩니다.</text>
+  <text x="90" y="1480" font-size="11" fill="#64748b">CSV를 올렸다면 "Build KG (CSV)" 버튼이 표시됩니다.</text>
+
+  <text x="90" y="1508" font-size="13" font-weight="700" fill="#991b1b">화면에서 보이는 것</text>
+  <rect x="90" y="1516" width="90" height="28" rx="6" fill="#fecaca" stroke="#fca5a5" stroke-width="1"/>
+  <text x="135" y="1535" text-anchor="middle" font-size="11" font-weight="600" fill="#991b1b">Build KG</text>
+
+  <!-- 진행 상태 플로우 -->
+  <rect x="200" y="1516" width="75" height="28" rx="14" fill="#fef9c3" stroke="#fde047" stroke-width="1"/>
+  <text x="237" y="1535" text-anchor="middle" font-size="10" font-weight="600" fill="#854d0e">queued</text>
+  <text x="283" y="1535" font-size="12" fill="#94a3b8">→</text>
+  <rect x="295" y="1516" width="80" height="28" rx="14" fill="#fed7aa" stroke="#fdba74" stroke-width="1"/>
+  <text x="335" y="1535" text-anchor="middle" font-size="10" font-weight="600" fill="#7c2d12">running</text>
+  <text x="383" y="1535" font-size="12" fill="#94a3b8">→</text>
+  <rect x="395" y="1516" width="100" height="28" rx="14" fill="#bbf7d0" stroke="#86efac" stroke-width="1"/>
+  <text x="445" y="1535" text-anchor="middle" font-size="10" font-weight="600" fill="#14532d">succeeded ✓</text>
+
+  <text x="90" y="1572" font-size="13" font-weight="700" fill="#991b1b">결과</text>
+  <rect x="90" y="1580" width="620" height="50" rx="8" fill="white" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="400" y="1601" text-anchor="middle" font-size="13" font-weight="700" fill="#991b1b">Neo4j 그래프 DB에 노드와 관계가 실제로 저장됨</text>
+  <text x="400" y="1620" text-anchor="middle" font-size="11" fill="#64748b">예: "42 nodes, 65 relationships (1.2s)" 같은 결과가 표시됩니다</text>
+
+  <!-- ===== 화살표 5→6 ===== -->
+  <line x1="400" y1="1654" x2="400" y2="1684" stroke="#64748b" stroke-width="2" marker-end="url(#arr)"/>
+  <rect x="345" y="1658" width="110" height="18" rx="4" fill="white" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="400" y="1671" text-anchor="middle" font-size="10" font-weight="600" fill="#64748b">Q&amp;A 버튼 클릭</text>
+
+  <!-- ================================================================ -->
+  <!-- STEP 6 — 자연어 질의응답 (보라색) -->
+  <!-- ================================================================ -->
+  <rect x="60" y="1690" width="680" height="370" rx="16" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="2" filter="url(#sh)"/>
+  <rect x="60" y="1690" width="680" height="44" rx="16" fill="#8b5cf6"/>
+  <rect x="60" y="1718" width="680" height="16" fill="#8b5cf6"/>
+  <circle cx="92" cy="1712" r="15" fill="white"/>
+  <text x="92" y="1718" text-anchor="middle" font-size="14" font-weight="800" fill="#8b5cf6">6</text>
+  <text x="120" y="1718" font-size="16" font-weight="700" fill="white">💬  자연어 질의응답</text>
+
+  <text x="90" y="1758" font-size="13" font-weight="700" fill="#3b0764">무엇을 하나요?</text>
+  <text x="90" y="1778" font-size="12" fill="#334155">채팅창에 한국어로 궁금한 것을 질문합니다.</text>
+  <text x="90" y="1796" font-size="11" fill="#64748b">또는 데모 질문 버튼(Q1~Q5)을 클릭하면 바로 답변을 받을 수 있습니다.</text>
+
+  <text x="90" y="1824" font-size="13" font-weight="700" fill="#3b0764">데모 질문 예시</text>
+  <rect x="90" y="1832" width="300" height="24" rx="6" fill="#ede9fe" stroke="#c4b5fd" stroke-width="1"/>
+  <text x="95" y="1849" font-size="10" fill="#3b0764"> Q1  "고객 김민수가 주문한 상품은?"</text>
+  <rect x="400" y="1832" width="300" height="24" rx="6" fill="#ede9fe" stroke="#c4b5fd" stroke-width="1"/>
+  <text x="405" y="1849" font-size="10" fill="#3b0764"> Q3  "가장 많이 팔린 카테고리 Top 3는?"</text>
+
+  <text x="90" y="1880" font-size="13" font-weight="700" fill="#3b0764">두 가지 답변 모드</text>
+  <!-- A 모드 -->
+  <rect x="90" y="1890" width="295" height="56" rx="10" fill="white" stroke="#3b82f6" stroke-width="1.5"/>
+  <rect x="98" y="1898" width="50" height="20" rx="4" fill="#3b82f6"/>
+  <text x="123" y="1912" text-anchor="middle" font-size="10" font-weight="700" fill="white">A 모드</text>
+  <text x="155" y="1912" font-size="11" font-weight="600" fill="#1e40af">템플릿 기반</text>
+  <text x="98" y="1934" font-size="10" fill="#64748b">정확하고 빠른 답변 (규칙 매칭)</text>
+  <!-- B 모드 -->
+  <rect x="400" y="1890" width="295" height="56" rx="10" fill="white" stroke="#f97316" stroke-width="1.5"/>
+  <rect x="408" y="1898" width="50" height="20" rx="4" fill="#f97316"/>
+  <text x="433" y="1912" text-anchor="middle" font-size="10" font-weight="700" fill="white">B 모드</text>
+  <text x="465" y="1912" font-size="11" font-weight="600" fill="#ea580c">AI 탐색</text>
+  <text x="408" y="1934" font-size="10" fill="#64748b">유연한 답변 (그래프 탐색 + AI)</text>
+
+  <text x="90" y="1972" font-size="13" font-weight="700" fill="#3b0764">결과</text>
+  <rect x="90" y="1980" width="620" height="56" rx="8" fill="white" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="400" y="2001" text-anchor="middle" font-size="13" font-weight="700" fill="#3b0764">한국어 답변 + 사용된 쿼리 + 증거 경로</text>
+  <text x="400" y="2020" text-anchor="middle" font-size="11" fill="#64748b">채팅 형태로 대화하듯 결과를 확인할 수 있습니다</text>
+
+  <!-- ================================================================ -->
+  <!-- 보너스 — 그래프 탐색 (우측 사이드) -->
+  <!-- ================================================================ -->
+  <rect x="60" y="2090" width="680" height="100" rx="16" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6,3" filter="url(#sh)"/>
+  <rect x="80" y="2105" width="30" height="30" rx="15" fill="#8b5cf6"/>
+  <text x="95" y="2126" text-anchor="middle" font-size="16" fill="white">🔍</text>
+  <text x="125" y="2120" font-size="14" font-weight="700" fill="#3b0764">보너스 — 그래프 탐색 (Explore Graph)</text>
+  <text x="125" y="2142" font-size="12" fill="#64748b">상단 메뉴의 "Explore Graph" 버튼으로 언제든 시각적 그래프 탐색 가능</text>
+  <text x="125" y="2160" font-size="11" fill="#94a3b8">노드 클릭 → 상세 정보 확인, 이웃 노드 펼치기, 필터/검색 지원</text>
+
+  <!-- ================================================================ -->
+  <!-- 하단 요약 — 전체 흐름 한 줄 -->
+  <!-- ================================================================ -->
+  <rect x="60" y="2220" width="680" height="90" rx="14" fill="white" stroke="#e2e8f0" stroke-width="1.5" filter="url(#sh)"/>
+  <text x="400" y="2248" text-anchor="middle" font-size="14" font-weight="800" fill="#1e293b">전체 흐름 요약</text>
+
+  <!-- 플로우 체인 -->
+  <rect x="75" y="2262" width="70" height="28" rx="6" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.2"/>
+  <text x="110" y="2281" text-anchor="middle" font-size="9" font-weight="700" fill="#1e40af">SQL 업로드</text>
+  <text x="153" y="2281" font-size="13" fill="#94a3b8">→</text>
+  <rect x="163" y="2262" width="75" height="28" rx="6" fill="#dcfce7" stroke="#22c55e" stroke-width="1.2"/>
+  <text x="200" y="2281" text-anchor="middle" font-size="9" font-weight="700" fill="#14532d">온톨로지</text>
+  <text x="246" y="2281" font-size="13" fill="#94a3b8">→</text>
+  <rect x="256" y="2262" width="65" height="28" rx="6" fill="#ffedd5" stroke="#f97316" stroke-width="1.2"/>
+  <text x="288" y="2281" text-anchor="middle" font-size="9" font-weight="700" fill="#7c2d12">검토·승인</text>
+  <text x="329" y="2281" font-size="13" fill="#94a3b8">→</text>
+  <rect x="339" y="2262" width="65" height="28" rx="6" fill="#fefce8" stroke="#eab308" stroke-width="1.2" stroke-dasharray="4,2"/>
+  <text x="371" y="2281" text-anchor="middle" font-size="9" font-weight="700" fill="#854d0e">CSV</text>
+  <text x="412" y="2281" font-size="13" fill="#94a3b8">→</text>
+  <rect x="422" y="2262" width="75" height="28" rx="6" fill="#fecaca" stroke="#ef4444" stroke-width="1.2"/>
+  <text x="459" y="2281" text-anchor="middle" font-size="9" font-weight="700" fill="#991b1b">KG 구축</text>
+  <text x="505" y="2281" font-size="13" fill="#94a3b8">→</text>
+  <rect x="515" y="2262" width="75" height="28" rx="6" fill="#ede9fe" stroke="#8b5cf6" stroke-width="1.2"/>
+  <text x="552" y="2281" text-anchor="middle" font-size="9" font-weight="700" fill="#3b0764">질의응답</text>
+  <text x="598" y="2281" font-size="13" fill="#94a3b8">→</text>
+  <rect x="608" y="2262" width="118" height="28" rx="6" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="4,2"/>
+  <text x="667" y="2281" text-anchor="middle" font-size="9" font-weight="700" fill="#64748b">그래프 탐색</text>
+
+  <!-- ================================================================ -->
+  <!-- 하단 문구 -->
+  <!-- ================================================================ -->
+  <rect x="200" y="2340" width="400" height="40" rx="20" fill="#f0fdf4" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="400" y="2365" text-anchor="middle" font-size="13" font-weight="700" fill="#14532d">⏱ 약 3~5분이면 전체 과정을 완료할 수 있습니다</text>
+
+  <!-- ================================================================ -->
+  <!-- 범례 -->
+  <!-- ================================================================ -->
+  <rect x="60" y="2410" width="680" height="50" rx="10" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="85" y="2438" font-size="11" font-weight="700" fill="#475569">범례:</text>
+  <line x1="135" y1="2435" x2="165" y2="2435" stroke="#64748b" stroke-width="2"/>
+  <text x="172" y="2440" font-size="10" fill="#64748b">필수</text>
+  <line x1="210" y1="2435" x2="240" y2="2435" stroke="#94a3b8" stroke-width="2" stroke-dasharray="5,3"/>
+  <text x="247" y="2440" font-size="10" fill="#94a3b8">선택</text>
+  <rect x="295" y="2427" width="14" height="14" rx="3" fill="#dbeafe" stroke="#3b82f6" stroke-width="1"/>
+  <text x="315" y="2440" font-size="10" fill="#3b82f6">입력</text>
+  <rect x="350" y="2427" width="14" height="14" rx="3" fill="#dcfce7" stroke="#22c55e" stroke-width="1"/>
+  <text x="370" y="2440" font-size="10" fill="#22c55e">생성</text>
+  <rect x="405" y="2427" width="14" height="14" rx="3" fill="#ffedd5" stroke="#f97316" stroke-width="1"/>
+  <text x="425" y="2440" font-size="10" fill="#f97316">검토</text>
+  <rect x="460" y="2427" width="14" height="14" rx="3" fill="#fef2f2" stroke="#ef4444" stroke-width="1"/>
+  <text x="480" y="2440" font-size="10" fill="#ef4444">구축</text>
+  <rect x="515" y="2427" width="14" height="14" rx="3" fill="#ede9fe" stroke="#8b5cf6" stroke-width="1"/>
+  <text x="535" y="2440" font-size="10" fill="#8b5cf6">활용</text>
+  <rect x="570" y="2427" width="14" height="14" rx="3" fill="#f8fafc" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="590" y="2440" font-size="10" fill="#94a3b8">부가</text>
+
+  <!-- 푸터 -->
+  <text x="400" y="2500" text-anchor="middle" font-size="11" fill="#94a3b8">GraphRAG Ontology Builder v0.9.0</text>
+  <text x="400" y="2520" text-anchor="middle" font-size="10" fill="#cbd5e1">SQL DDL → Knowledge Graph → 자연어 Q&amp;A</text>
+</svg>

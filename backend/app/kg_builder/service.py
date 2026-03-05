@@ -23,7 +23,23 @@ from app.models.schemas import (
 logger = logging.getLogger(__name__)
 
 # In-memory job store — primary source of truth for polling
+MAX_COMPLETED_JOBS = 100
 _jobs: dict[str, KGBuildResponse] = {}
+
+
+def _prune_completed_jobs() -> None:
+    """Remove oldest completed/failed jobs when exceeding MAX_COMPLETED_JOBS."""
+    terminal = [
+        (jid, job) for jid, job in _jobs.items()
+        if job.status in ("succeeded", "failed")
+    ]
+    if len(terminal) <= MAX_COMPLETED_JOBS:
+        return
+    # Sort by completed_at (oldest first), prune excess
+    terminal.sort(key=lambda x: x[1].completed_at or "")
+    excess = len(terminal) - MAX_COMPLETED_JOBS
+    for jid, _ in terminal[:excess]:
+        del _jobs[jid]
 
 
 def get_job(job_id: str) -> KGBuildResponse | None:
@@ -33,6 +49,7 @@ def get_job(job_id: str) -> KGBuildResponse | None:
 
 def create_job(job_id: str, version_id: int) -> KGBuildResponse:
     """Create a new queued job in memory and PG (best-effort)."""
+    _prune_completed_jobs()
     job = KGBuildResponse(
         build_job_id=job_id,
         status="queued",
@@ -123,15 +140,11 @@ def run_kg_build(
 
         # Clean partial graph (best-effort)
         try:
-            from neo4j import GraphDatabase
+            from app.db.neo4j_client import get_driver
 
-            driver = GraphDatabase.driver(
-                settings.neo4j_uri,
-                auth=(settings.neo4j_user, settings.neo4j_password),
-            )
+            driver = get_driver()
             with driver.session() as session:
                 session.run("MATCH (n) DETACH DELETE n")
-            driver.close()
         except Exception:
             logger.warning("Failed to clean partial graph", exc_info=True)
 

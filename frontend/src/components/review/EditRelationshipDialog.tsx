@@ -88,18 +88,18 @@ export default function EditRelationshipDialog({
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {relationship ? 'Edit Relationship' : 'Add Relationship'}
+            {relationship ? '관계 수정' : '관계 추가'}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Name (UPPER_SNAKE)</Label>
+              <Label>이름 (UPPER_SNAKE)</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="PLACED" />
             </div>
             <div className="space-y-2">
-              <Label>Data Table</Label>
+              <Label>데이터 테이블</Label>
               <Input
                 value={dataTable}
                 onChange={(e) => setDataTable(e.target.value)}
@@ -110,7 +110,7 @@ export default function EditRelationshipDialog({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Source Node</Label>
+              <Label>소스 노드</Label>
               <Select value={sourceNode} onValueChange={setSourceNode}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select..." />
@@ -123,7 +123,7 @@ export default function EditRelationshipDialog({
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Target Node</Label>
+              <Label>타겟 노드</Label>
               <Select value={targetNode} onValueChange={setTargetNode}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select..." />
@@ -139,7 +139,7 @@ export default function EditRelationshipDialog({
 
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label>Source Key Column</Label>
+              <Label>소스 키 컬럼</Label>
               <Input
                 value={sourceKeyColumn}
                 onChange={(e) => setSourceKeyColumn(e.target.value)}
@@ -147,7 +147,7 @@ export default function EditRelationshipDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label>Target Key Column</Label>
+              <Label>타겟 키 컬럼</Label>
               <Input
                 value={targetKeyColumn}
                 onChange={(e) => setTargetKeyColumn(e.target.value)}
@@ -155,7 +155,7 @@ export default function EditRelationshipDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label>Derivation</Label>
+              <Label>도출 방식</Label>
               <Select value={derivation} onValueChange={setDerivation}>
                 <SelectTrigger>
                   <SelectValue />
@@ -172,22 +172,22 @@ export default function EditRelationshipDialog({
           {/* Properties sub-table */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Properties</Label>
+              <Label>속성 (Properties)</Label>
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => setProperties((prev) => [...prev, emptyProp()])}
               >
-                + Add Property
+                + 속성 추가
               </Button>
             </div>
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Source Column</TableHead>
-                    <TableHead>Type</TableHead>
+                    <TableHead>이름</TableHead>
+                    <TableHead>소스 컬럼</TableHead>
+                    <TableHead>타입</TableHead>
                     <TableHead />
                   </TableRow>
                 </TableHeader>
@@ -195,7 +195,7 @@ export default function EditRelationshipDialog({
                   {properties.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center text-muted-foreground text-sm">
-                        No properties.
+                        속성 없음
                       </TableCell>
                     </TableRow>
                   )}
@@ -245,10 +245,10 @@ export default function EditRelationshipDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            취소
           </Button>
           <Button onClick={handleSave} disabled={!valid}>
-            Save
+            저장
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -8,9 +8,7 @@ from __future__ import annotations
 import logging
 import time
 
-from neo4j import GraphDatabase
-
-from app.config import settings
+from app.db.neo4j_client import get_driver
 from app.exceptions import CypherExecutionError
 from app.models.schemas import QueryResponse
 from app.query.router import route_question
@@ -91,14 +89,10 @@ def run_query(question: str, mode: str = "a") -> QueryResponse:
 def _execute_cypher(cypher: str, params: dict[str, object]) -> list[dict]:
     """Run Cypher against Neo4j and return list of record dicts."""
     try:
-        driver = GraphDatabase.driver(
-            settings.neo4j_uri,
-            auth=(settings.neo4j_user, settings.neo4j_password),
-        )
+        driver = get_driver()
         with driver.session() as session:
             result = session.run(cypher, **params)
             records = [dict(r) for r in result]
-        driver.close()
         return records
     except Exception as e:
         raise CypherExecutionError(f"Neo4j execution failed: {e}")
@@ -326,10 +320,7 @@ def _batch_resolve_node_ids(
 ) -> list[str]:
     """Resolve (label, prop, values) tuples to composite node IDs via Neo4j."""
     try:
-        driver = GraphDatabase.driver(
-            settings.neo4j_uri,
-            auth=(settings.neo4j_user, settings.neo4j_password),
-        )
+        driver = get_driver()
         result_ids: list[str] = []
         with driver.session() as session:
             for label, prop, vals in lookups:
@@ -341,7 +332,6 @@ def _batch_resolve_node_ids(
                         composite = f"{label}_{nid}"
                         if composite not in result_ids:
                             result_ids.append(composite)
-        driver.close()
         return result_ids
     except Exception as e:
         logger.warning("Failed to resolve related node IDs: %s", e)

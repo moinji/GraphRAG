@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import UploadPage from '@/pages/UploadPage';
 import ReviewPage from '@/pages/ReviewPage';
-import QueryPage from '@/pages/QueryPage';
-import ExplorePage from '@/pages/ExplorePage';
 import type { ERDSchema, OntologyGenerateResponse } from '@/types/ontology';
+
+const QueryPage = lazy(() => import('@/pages/QueryPage'));
+const ExplorePage = lazy(() => import('@/pages/ExplorePage'));
 
 type Page = 'upload' | 'review' | 'query' | 'explore';
 
@@ -37,14 +38,14 @@ function App() {
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="container mx-auto flex items-center justify-between px-4 py-3">
-          <h1 className="text-lg font-semibold">GraphRAG Ontology Builder</h1>
+          <h1 className="text-lg font-semibold">GraphRAG 온톨로지 빌더</h1>
           <nav className="flex items-center gap-2">
             {page === 'review' && (
               <button
                 onClick={handleBackToUpload}
                 className="text-sm text-muted-foreground hover:text-foreground"
               >
-                &larr; New Upload
+                &larr; 새 업로드
               </button>
             )}
             <button
@@ -58,7 +59,7 @@ function App() {
                   : 'text-muted-foreground hover:text-foreground hover:bg-accent'
               }`}
             >
-              Explore Graph
+              그래프 탐색
             </button>
           </nav>
         </div>
@@ -68,8 +69,16 @@ function App() {
         {page === 'review' && generateResult && erd && (
           <ReviewPage result={generateResult} erd={erd} onGoToQuery={handleGoToQuery} />
         )}
-        {page === 'query' && <QueryPage onBack={handleBackToReview} />}
-        {page === 'explore' && <ExplorePage onBack={() => setPage(prevPage)} />}
+        {page === 'query' && (
+          <Suspense fallback={<div className="flex items-center justify-center h-40 text-muted-foreground">로딩 중...</div>}>
+            <QueryPage onBack={handleBackToReview} />
+          </Suspense>
+        )}
+        {page === 'explore' && (
+          <Suspense fallback={<div className="flex items-center justify-center h-40 text-muted-foreground">로딩 중...</div>}>
+            <ExplorePage onBack={() => setPage(prevPage)} />
+          </Suspense>
+        )}
       </main>
     </div>
   );

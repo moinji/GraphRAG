@@ -38,14 +38,6 @@ class LLMEnrichmentError(Exception):
         super().__init__(detail)
 
 
-class DatabaseError(Exception):
-    """Raised when PG operation fails (non-fatal)."""
-
-    def __init__(self, detail: str = "Database operation failed"):
-        self.detail = detail
-        super().__init__(detail)
-
-
 class VersionNotFoundError(Exception):
     """Raised when an ontology version is not found."""
 
@@ -90,10 +82,6 @@ async def llm_enrichment_error_handler(
     _request: Request, exc: LLMEnrichmentError
 ) -> JSONResponse:
     return JSONResponse(status_code=502, content={"detail": exc.detail})
-
-
-async def database_error_handler(_request: Request, exc: DatabaseError) -> JSONResponse:
-    return JSONResponse(status_code=500, content={"detail": exc.detail})
 
 
 async def version_not_found_handler(

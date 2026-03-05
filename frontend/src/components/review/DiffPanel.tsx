@@ -11,11 +11,11 @@ export default function DiffPanel({ diffs, stage }: DiffPanelProps) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">LLM Changes</CardTitle>
+          <CardTitle className="text-base">LLM 변경 사항</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            No LLM changes (FK rules only applied).
+            LLM 변경 없음 (FK 규칙만 적용됨)
           </p>
         </CardContent>
       </Card>
@@ -25,7 +25,7 @@ export default function DiffPanel({ diffs, stage }: DiffPanelProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">LLM Changes ({diffs.length})</CardTitle>
+        <CardTitle className="text-base">LLM 변경 사항 ({diffs.length})</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         {diffs.map((diff, i) => (

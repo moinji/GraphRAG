@@ -1,0 +1,6 @@
+id,name,email,phone,address_id
+1,김민수,minsu@example.com,010-1234-5678,1
+2,이영희,younghee@example.com,010-2345-6789,2
+3,박지훈,jihoon@example.com,010-3456-7890,3
+4,최수진,soojin@example.com,010-4567-8901,4
+5,정대현,daehyun@example.com,010-5678-9012,5

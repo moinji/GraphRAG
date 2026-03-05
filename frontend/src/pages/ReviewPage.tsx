@@ -10,7 +10,10 @@ import RelationshipTable from '@/components/review/RelationshipTable';
 import DiffPanel from '@/components/review/DiffPanel';
 import EditNodeDialog from '@/components/review/EditNodeDialog';
 import EditRelationshipDialog from '@/components/review/EditRelationshipDialog';
-import { updateVersion, approveVersion, startKGBuild, getKGBuildStatus, uploadCSVFiles } from '@/api/client';
+import CSVUploadSection from '@/components/review/CSVUploadSection';
+import BuildKGActions from '@/components/review/BuildKGActions';
+import { updateVersion, approveVersion, startKGBuild, getKGBuildStatus, uploadCSVFiles, resetGraph, APIError } from '@/api/client';
+import { BUILD_POLL_INTERVAL_MS, SUCCESS_MSG_TIMEOUT_MS } from '@/constants';
 import type {
   CSVTableSummary,
   ERDSchema,
@@ -46,11 +49,14 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
   // KG Build state
   const [buildJob, setBuildJob] = useState<KGBuildResponse | null>(null);
   const [buildLoading, setBuildLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // CSV Import state
   const [csvSessionId, setCsvSessionId] = useState<string | null>(null);
   const [csvTables, setCsvTables] = useState<CSVTableSummary[]>([]);
+  const [csvErrors, setCsvErrors] = useState<string[]>([]);
+  const [csvWarnings, setCsvWarnings] = useState<string[]>([]);
   const [csvUploading, setCsvUploading] = useState(false);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
@@ -61,13 +67,13 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
   function showError(msg: string) {
     setError(msg);
     setSuccessMsg(null);
-    setTimeout(() => setError(null), 5000);
+    // 에러는 auto-dismiss하지 않음 — 다음 액션 시 자연 소멸
   }
 
   function showSuccess(msg: string) {
     setSuccessMsg(msg);
     setError(null);
-    setTimeout(() => setSuccessMsg(null), 5000);
+    setTimeout(() => setSuccessMsg(null), SUCCESS_MSG_TIMEOUT_MS);
   }
 
   // ── Save (PUT) ──────────────────────────────────────────────────
@@ -170,14 +176,26 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
     if (!fileList || fileList.length === 0) return;
     setCsvUploading(true);
     setCsvTables([]);
+    setCsvErrors([]);
+    setCsvWarnings([]);
     setCsvSessionId(null);
     try {
       const files = Array.from(fileList);
       const resp = await uploadCSVFiles(files, erd);
       setCsvSessionId(resp.csv_session_id);
       setCsvTables(resp.tables);
-      showSuccess(`CSV uploaded: ${resp.tables.length} table(s) validated`);
+      if (resp.errors?.length > 0) setCsvErrors(resp.errors);
+      if (resp.warnings?.length > 0) setCsvWarnings(resp.warnings);
+      // 부분 성공: 유효 파일은 세션 저장, 실패 파일은 에러로 표시
+      if (resp.errors?.length > 0) {
+        showSuccess(`CSV: ${resp.tables.length} table(s) OK, ${resp.errors.length} error(s)`);
+      } else {
+        showSuccess(`CSV uploaded: ${resp.tables.length} table(s) validated`);
+      }
     } catch (e) {
+      if (e instanceof APIError && e.errors.length > 0) {
+        setCsvErrors(e.errors);
+      }
       showError(e instanceof Error ? e.message : 'CSV upload failed');
     } finally {
       setCsvUploading(false);
@@ -208,7 +226,6 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
       const job = await startKGBuild(versionId, erd, csvSessionId ?? undefined);
       setBuildJob(job);
 
-      // Start polling every 2 seconds
       pollRef.current = setInterval(async () => {
         try {
           const updated = await getKGBuildStatus(job.build_job_id);
@@ -228,7 +245,7 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
           stopPolling();
           setBuildLoading(false);
         }
-      }, 2000);
+      }, BUILD_POLL_INTERVAL_MS);
     } catch (e) {
       showError(e instanceof Error ? e.message : 'Build KG failed');
       setBuildLoading(false);
@@ -237,6 +254,20 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
 
   const buildDisabled = status !== 'approved' || buildLoading || !versionId;
 
+  async function handleResetGraph() {
+    if (!window.confirm('그래프를 초기화하시겠습니까? Neo4j의 모든 노드와 엣지가 삭제됩니다.')) return;
+    setResetLoading(true);
+    try {
+      const resp = await resetGraph();
+      setBuildJob(null);
+      showSuccess(`Graph reset: ${resp.deleted_nodes} nodes, ${resp.deleted_edges} edges deleted`);
+    } catch (e) {
+      showError(e instanceof Error ? e.message : 'Reset failed');
+    } finally {
+      setResetLoading(false);
+    }
+  }
+
   // ── Render ──────────────────────────────────────────────────────
 
   return (
@@ -244,7 +275,7 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h2 className="text-xl font-semibold">Ontology Review</h2>
+          <h2 className="text-xl font-semibold">온톨로지 리뷰 (Review)</h2>
           <Badge variant={locked ? 'default' : 'secondary'}>
             {status}
           </Badge>
@@ -274,16 +305,16 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
       {mode === 'auto' && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Auto Mode</CardTitle>
+            <CardTitle className="text-base">자동 모드 (Auto)</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div className="rounded-lg border p-3">
-                <p className="text-muted-foreground">Node Types</p>
+                <p className="text-muted-foreground">노드 타입 (Node Types)</p>
                 <p className="text-2xl font-bold">{ontology.node_types.length}</p>
               </div>
               <div className="rounded-lg border p-3">
-                <p className="text-muted-foreground">Relationships</p>
+                <p className="text-muted-foreground">관계 (Relationships)</p>
                 <p className="text-2xl font-bold">{ontology.relationship_types.length}</p>
               </div>
             </div>
@@ -292,75 +323,33 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
             </p>
             <div className="flex gap-2">
               <Button onClick={handleApprove} disabled={locked || loading}>
-                {locked ? 'Approved' : loading ? 'Approving...' : 'Auto Approve'}
+                {locked ? '승인됨' : loading ? '승인 중...' : '자동 승인'}
               </Button>
-              <Button
-                variant="outline"
-                onClick={handleBuildKG}
-                disabled={buildDisabled}
-              >
-                {buildLoading ? 'Building...' : csvSessionId ? 'Build KG (CSV)' : 'Build KG'}
-              </Button>
-              {buildJob?.status === 'succeeded' && onGoToQuery && (
-                <Button onClick={onGoToQuery}>
-                  Q&A
-                </Button>
-              )}
             </div>
             {locked && (
               <div className="space-y-2">
-                <p className="text-sm font-medium">CSV Data (optional)</p>
-                <div className="flex items-center gap-2">
-                  <input
-                    ref={csvInputRef}
-                    type="file"
-                    multiple
-                    accept=".csv"
-                    onChange={(e) => handleCSVUpload(e.target.files)}
-                    disabled={csvUploading}
-                    className="text-sm file:mr-2 file:rounded file:border-0 file:bg-primary file:px-3 file:py-1 file:text-sm file:text-primary-foreground hover:file:bg-primary/90"
-                  />
-                  {csvUploading && <span className="text-sm text-muted-foreground animate-pulse">Validating...</span>}
-                </div>
-                {csvTables.length > 0 && (
-                  <div className="space-y-1">
-                    {csvTables.map((t) => (
-                      <div key={t.table_name} className="flex items-center gap-2 text-sm">
-                        <Badge variant="default" className="bg-green-600">{t.table_name}</Badge>
-                        <span>{t.row_count} rows</span>
-                        <span className="text-muted-foreground">({t.columns.join(', ')})</span>
-                        {t.warnings.map((w, i) => (
-                          <span key={i} className="text-yellow-600 text-xs">{w}</span>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {!csvSessionId && csvTables.length === 0 && !csvUploading && (
-                  <p className="text-xs text-muted-foreground">No CSV uploaded — will use sample data</p>
-                )}
+                <p className="text-sm font-medium">CSV 데이터 (선택사항)</p>
+                <CSVUploadSection
+                  csvInputRef={csvInputRef}
+                  csvUploading={csvUploading}
+                  csvTables={csvTables}
+                  csvErrors={csvErrors}
+                  csvWarnings={csvWarnings}
+                  csvSessionId={csvSessionId}
+                  onUpload={handleCSVUpload}
+                />
               </div>
             )}
-            {buildJob && (
-              <div className="mt-3 rounded-lg border p-3 text-sm">
-                <p className="font-medium">
-                  Build: <span className="capitalize">{buildJob.status}</span>
-                </p>
-                {(buildJob.status === 'queued' || buildJob.status === 'running') && (
-                  <p className="text-muted-foreground animate-pulse">Processing...</p>
-                )}
-                {buildJob.status === 'succeeded' && buildJob.progress && (
-                  <p className="text-green-700">
-                    {buildJob.progress.nodes_created} nodes, {buildJob.progress.relationships_created} relationships ({buildJob.progress.duration_seconds}s)
-                  </p>
-                )}
-                {buildJob.status === 'failed' && buildJob.error && (
-                  <p className="text-destructive">
-                    {buildJob.error.stage}: {buildJob.error.message}
-                  </p>
-                )}
-              </div>
-            )}
+            <BuildKGActions
+              buildDisabled={buildDisabled}
+              buildLoading={buildLoading}
+              resetLoading={resetLoading}
+              csvSessionId={csvSessionId}
+              buildJob={buildJob}
+              onBuildKG={handleBuildKG}
+              onResetGraph={handleResetGraph}
+              onGoToQuery={onGoToQuery}
+            />
           </CardContent>
         </Card>
       )}
@@ -370,9 +359,9 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
         <>
           <Tabs defaultValue="nodes">
             <TabsList>
-              <TabsTrigger value="nodes">Nodes</TabsTrigger>
-              <TabsTrigger value="relationships">Relationships</TabsTrigger>
-              <TabsTrigger value="changes">Changes</TabsTrigger>
+              <TabsTrigger value="nodes">노드</TabsTrigger>
+              <TabsTrigger value="relationships">관계</TabsTrigger>
+              <TabsTrigger value="changes">변경 사항</TabsTrigger>
             </TabsList>
 
             <TabsContent value="nodes" className="mt-4">
@@ -405,38 +394,18 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
           {locked && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">CSV Data (optional)</CardTitle>
+                <CardTitle className="text-base">CSV 데이터 (선택사항)</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <input
-                    ref={csvInputRef}
-                    type="file"
-                    multiple
-                    accept=".csv"
-                    onChange={(e) => handleCSVUpload(e.target.files)}
-                    disabled={csvUploading}
-                    className="text-sm file:mr-2 file:rounded file:border-0 file:bg-primary file:px-3 file:py-1 file:text-sm file:text-primary-foreground hover:file:bg-primary/90"
-                  />
-                  {csvUploading && <span className="text-sm text-muted-foreground animate-pulse">Validating...</span>}
-                </div>
-                {csvTables.length > 0 && (
-                  <div className="space-y-1">
-                    {csvTables.map((t) => (
-                      <div key={t.table_name} className="flex items-center gap-2 text-sm">
-                        <Badge variant="default" className="bg-green-600">{t.table_name}</Badge>
-                        <span>{t.row_count} rows</span>
-                        <span className="text-muted-foreground">({t.columns.join(', ')})</span>
-                        {t.warnings.map((w, i) => (
-                          <span key={i} className="text-yellow-600 text-xs">{w}</span>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {!csvSessionId && csvTables.length === 0 && !csvUploading && (
-                  <p className="text-xs text-muted-foreground">No CSV uploaded — will use sample data</p>
-                )}
+              <CardContent>
+                <CSVUploadSection
+                  csvInputRef={csvInputRef}
+                  csvUploading={csvUploading}
+                  csvTables={csvTables}
+                  csvErrors={csvErrors}
+                  csvWarnings={csvWarnings}
+                  csvSessionId={csvSessionId}
+                  onUpload={handleCSVUpload}
+                />
               </CardContent>
             </Card>
           )}
@@ -444,44 +413,22 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
           {/* Action buttons */}
           <div className="flex gap-2">
             <Button onClick={handleSave} disabled={locked || loading} variant="outline">
-              {loading ? 'Saving...' : 'Save'}
+              {loading ? '저장 중...' : '저장'}
             </Button>
             <Button onClick={handleApprove} disabled={locked || loading}>
-              {locked ? 'Approved' : loading ? 'Approving...' : 'Approve'}
+              {locked ? '승인됨' : loading ? '승인 중...' : '승인'}
             </Button>
-            <Button
-              variant="outline"
-              onClick={handleBuildKG}
-              disabled={buildDisabled}
-            >
-              {buildLoading ? 'Building...' : csvSessionId ? 'Build KG (CSV)' : 'Build KG'}
-            </Button>
-            {buildJob?.status === 'succeeded' && onGoToQuery && (
-              <Button onClick={onGoToQuery}>
-                Q&A
-              </Button>
-            )}
           </div>
-          {buildJob && (
-            <div className="rounded-lg border p-3 text-sm">
-              <p className="font-medium">
-                Build: <span className="capitalize">{buildJob.status}</span>
-              </p>
-              {(buildJob.status === 'queued' || buildJob.status === 'running') && (
-                <p className="text-muted-foreground animate-pulse">Processing...</p>
-              )}
-              {buildJob.status === 'succeeded' && buildJob.progress && (
-                <p className="text-green-700">
-                  {buildJob.progress.nodes_created} nodes, {buildJob.progress.relationships_created} relationships ({buildJob.progress.duration_seconds}s)
-                </p>
-              )}
-              {buildJob.status === 'failed' && buildJob.error && (
-                <p className="text-destructive">
-                  {buildJob.error.stage}: {buildJob.error.message}
-                </p>
-              )}
-            </div>
-          )}
+          <BuildKGActions
+            buildDisabled={buildDisabled}
+            buildLoading={buildLoading}
+            resetLoading={resetLoading}
+            csvSessionId={csvSessionId}
+            buildJob={buildJob}
+            onBuildKG={handleBuildKG}
+            onResetGraph={handleResetGraph}
+            onGoToQuery={onGoToQuery}
+          />
         </>
       )}
 

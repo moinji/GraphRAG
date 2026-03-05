@@ -151,6 +151,7 @@ export interface CSVUploadResponse {
   csv_session_id: string;
   tables: CSVTableSummary[];
   errors: string[];
+  warnings: string[];
 }
 
 // ── Query API ──────────────────────────────────────────────────

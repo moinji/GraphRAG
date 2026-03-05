@@ -9,22 +9,46 @@ import time
 
 from app.models.schemas import CSVTableSummary, ERDSchema
 
-# In-memory session store: session_id → { table_name: [row_dicts] }
-_csv_sessions: dict[str, dict[str, list[dict]]] = {}
+# In-memory session store: session_id → { "data": {...}, "created_at": float }
+SESSION_TTL = 3600  # seconds (1 hour)
+MAX_SESSIONS = 50
+
+_csv_sessions: dict[str, dict] = {}
+
+
+def _cleanup_expired_sessions() -> None:
+    """Remove sessions older than SESSION_TTL."""
+    now = time.time()
+    expired = [
+        sid for sid, sess in _csv_sessions.items()
+        if now - sess.get("created_at", 0) > SESSION_TTL
+    ]
+    for sid in expired:
+        del _csv_sessions[sid]
 
 
 def create_session(data: dict[str, list[dict]]) -> str:
     """Store parsed CSV data and return a session ID."""
+    _cleanup_expired_sessions()
+    # Evict oldest if at capacity
+    while len(_csv_sessions) >= MAX_SESSIONS:
+        oldest_id = min(_csv_sessions, key=lambda k: _csv_sessions[k].get("created_at", 0))
+        del _csv_sessions[oldest_id]
+
     ts = int(time.time())
     rand = f"{random.randint(0, 0xFFFF):04x}"
     session_id = f"csv_{ts}_{rand}"
-    _csv_sessions[session_id] = data
+    _csv_sessions[session_id] = {"data": data, "created_at": time.time()}
     return session_id
 
 
 def get_session(session_id: str) -> dict[str, list[dict]] | None:
     """Retrieve CSV data for a session."""
-    return _csv_sessions.get(session_id)
+    _cleanup_expired_sessions()
+    sess = _csv_sessions.get(session_id)
+    if sess is None:
+        return None
+    return sess.get("data")
 
 
 def delete_session(session_id: str) -> None:
@@ -35,7 +59,7 @@ def delete_session(session_id: str) -> None:
 def parse_csv_files(
     files_data: list[tuple[str, bytes]],
     erd: ERDSchema,
-) -> tuple[dict[str, list[dict]], list[CSVTableSummary], list[str]]:
+) -> tuple[dict[str, list[dict]], list[CSVTableSummary], list[str], list[str]]:
     """Parse multiple CSV files against an ERD schema.
 
     Args:
@@ -43,15 +67,18 @@ def parse_csv_files(
         erd: the ERD schema for validation
 
     Returns:
-        (data_dict, summaries, errors)
+        (data_dict, summaries, errors, warnings)
         - data_dict: { table_name: [row_dicts] }
         - summaries: per-table summary info
-        - errors: list of error messages (if any, upload should be rejected)
+        - errors: list of error messages (blocking)
+        - warnings: list of non-blocking warning messages
     """
     erd_table_names = {t.name.lower() for t in erd.tables}
     data: dict[str, list[dict]] = {}
     summaries: list[CSVTableSummary] = []
     errors: list[str] = []
+    global_warnings: list[str] = []
+    seen_tables: set[str] = set()
 
     for filename, content in files_data:
         table_name, rows, columns, warnings, file_errors = _parse_single_csv(
@@ -69,6 +96,14 @@ def parse_csv_files(
             )
             continue
 
+        # Detect duplicate table uploads
+        if table_name.lower() in seen_tables:
+            errors.append(
+                f"{filename}: duplicate CSV for table '{table_name}' (already uploaded)"
+            )
+            continue
+        seen_tables.add(table_name.lower())
+
         data[table_name] = rows
         summaries.append(
             CSVTableSummary(
@@ -79,7 +114,14 @@ def parse_csv_files(
             )
         )
 
-    return data, summaries, errors
+    # Warn about ERD tables with no CSV data (non-blocking)
+    uploaded_tables = {t.lower() for t in data}
+    missing_tables = erd_table_names - uploaded_tables
+    if missing_tables:
+        for t in sorted(missing_tables):
+            global_warnings.append(f"No CSV for table '{t}' — nodes will be empty")
+
+    return data, summaries, errors, global_warnings
 
 
 def _parse_single_csv(
@@ -100,14 +142,14 @@ def _parse_single_csv(
         errors.append(f"{filename}: file must have .csv extension")
         return "", [], [], warnings, errors
 
-    table_name = filename[:-4]  # strip .csv
+    table_name = filename[:-4].lower()  # strip .csv + normalize to lowercase
 
-    # Decode content
+    # Decode content (utf-8-sig strips BOM automatically)
     try:
-        text = content.decode("utf-8")
+        text = content.decode("utf-8-sig")
     except UnicodeDecodeError:
         try:
-            text = content.decode("utf-8-sig")
+            text = content.decode("utf-8")
         except UnicodeDecodeError:
             errors.append(f"{filename}: unable to decode file (use UTF-8)")
             return table_name, [], [], warnings, errors
@@ -119,11 +161,6 @@ def _parse_single_csv(
         return table_name, [], [], warnings, errors
 
     csv_columns = list(reader.fieldnames)
-
-    # Require id column
-    if "id" not in csv_columns:
-        errors.append(f"{filename}: missing required 'id' column")
-        return table_name, [], [], warnings, errors
 
     # Get column type map from ERD
     col_type_map = _get_column_type_map(table_name, erd)
@@ -218,6 +255,20 @@ def _coerce_value(value: str, sql_type: str, nullable: bool) -> object:
 
     # Everything else → string
     return stripped
+
+
+def _get_primary_key(table_name: str, erd: ERDSchema) -> str | None:
+    """Return the primary key column name for a table, or None."""
+    for table in erd.tables:
+        if table.name.lower() == table_name.lower():
+            if table.primary_key:
+                return table.primary_key
+            # Fall back: look for is_primary_key flag in columns
+            for col in table.columns:
+                if col.is_primary_key:
+                    return col.name
+            return None
+    return None
 
 
 def _get_column_type_map(

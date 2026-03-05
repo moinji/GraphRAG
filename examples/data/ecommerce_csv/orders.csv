@@ -1,0 +1,9 @@
+id,customer_id,status,total_amount,coupon_id,created_at
+1,1,delivered,3500000,,2024-01-15
+2,1,delivered,323100,1,2024-02-20
+3,2,delivered,2348000,,2024-01-20
+4,3,shipped,3536000,2,2024-03-01
+5,2,delivered,3959000,,2024-02-10
+6,4,shipped,1521000,1,2024-03-05
+7,5,delivered,2608000,,2024-01-25
+8,1,delivered,699000,,2024-03-10

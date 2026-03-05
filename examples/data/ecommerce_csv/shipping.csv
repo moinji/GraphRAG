@@ -1,0 +1,9 @@
+id,order_id,address_id,carrier,tracking_number,status,shipped_at
+1,1,1,CJ대한통운,CJ123456789,delivered,2024-01-16
+2,2,1,한진택배,HJ987654321,delivered,2024-02-21
+3,3,2,CJ대한통운,CJ234567890,delivered,2024-01-21
+4,4,3,로젠택배,LG345678901,in_transit,2024-03-02
+5,5,2,CJ대한통운,CJ456789012,delivered,2024-02-11
+6,6,4,한진택배,HJ567890123,in_transit,2024-03-06
+7,7,5,CJ대한통운,CJ678901234,delivered,2024-01-26
+8,8,1,로젠택배,LG789012345,delivered,2024-03-11

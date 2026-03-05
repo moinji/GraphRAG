@@ -11,10 +11,10 @@ export default function ModeToggle({ mode, onModeChange, disabled }: ModeToggleP
     <Tabs value={mode} onValueChange={(v) => onModeChange(v as 'auto' | 'review')}>
       <TabsList>
         <TabsTrigger value="auto" disabled={disabled}>
-          Auto
+          자동 (Auto)
         </TabsTrigger>
         <TabsTrigger value="review" disabled={disabled}>
-          Review
+          검토 (Review)
         </TabsTrigger>
       </TabsList>
     </Tabs>

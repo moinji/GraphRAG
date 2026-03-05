@@ -144,12 +144,12 @@ async def test_table_not_in_erd(api_client: AsyncClient):
 
 
 # ════════════════════════════════════════════════════════════════════
-#  #4: Missing id column → 422
+#  #4: CSV with only DDL-unknown columns → 200 + warnings (PK not required)
 # ════════════════════════════════════════════════════════════════════
 
 @pytest.mark.anyio
 async def test_missing_id_column(api_client: AsyncClient):
-    """#4: CSV without 'id' column → 422."""
+    """#4: CSV without PK column still accepted (columns validated against DDL)."""
     erd = _mini_erd()
     csv_content = "name,email\nAlice,alice@test.com\n"
 
@@ -158,8 +158,7 @@ async def test_missing_id_column(api_client: AsyncClient):
         files=[("files", ("customers.csv", csv_content.encode(), "text/csv"))],
         data={"erd_json": erd.model_dump_json()},
     )
-    assert resp.status_code == 422
-    assert "id" in resp.json()["errors"][0].lower()
+    assert resp.status_code == 200
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -172,7 +171,7 @@ async def test_extra_columns_warning():
     erd = _mini_erd()
     csv_content = _csv_bytes("id,name,email,age,extra_col\n1,Alice,a@test.com,30,bonus\n")
 
-    data, summaries, errors = parse_csv_files(
+    data, summaries, errors, warnings = parse_csv_files(
         [("customers.csv", csv_content)], erd
     )
     assert len(errors) == 0

@@ -2,6 +2,7 @@ services:
   neo4j:
     image: neo4j:5-community
     container_name: graphrag-neo4j
+    profiles: ["local"]
     ports:
       - "7474:7474"
       - "7687:7687"
@@ -15,6 +16,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   postgres:
     image: postgres:16-alpine
@@ -33,17 +35,6 @@ services:
       timeout: 5s
       retries: 10
 
-  redis:
-    image: redis:7-alpine
-    container_name: graphrag-redis
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   backend:
     build:
       context: .
@@ -54,12 +45,16 @@ services:
     env_file:
       - .env
     depends_on:
-      neo4j:
-        condition: service_healthy
       postgres:
         condition: service_healthy
-      redis:
+      neo4j:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     restart: unless-stopped
 
   frontend:

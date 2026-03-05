@@ -19,6 +19,7 @@ export interface UseGraphDataReturn {
   setSearchTerm: (term: string) => void;
   matchedNodeIds: Set<string>;
   expandNode: (nodeId: string) => Promise<void>;
+  reload: () => Promise<void>;
   allLabels: string[];
   allEdgeTypes: string[];
   rawNodes: GraphNode[];
@@ -114,45 +115,40 @@ export function useGraphData(limit: number = 500): UseGraphDataReturn {
     return els;
   }, [rawNodes, rawEdges, visibleLabels, visibleEdgeTypes]);
 
+  // Reload graph data from Neo4j
+  const reload = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [graphData, statsData] = await Promise.all([
+        fetchGraph(limit),
+        fetchGraphStats(),
+      ]);
+
+      setRawNodes(graphData.nodes);
+      setRawEdges(graphData.edges);
+      setTotalNodes(graphData.total_nodes);
+      setTotalEdges(graphData.total_edges);
+      setTruncated(graphData.truncated);
+      setStats(statsData);
+      setSelectedNode(null);
+
+      // Initialize all labels/edge types as visible
+      const labels = new Set(graphData.nodes.map((n) => n.label));
+      setVisibleLabels(labels);
+      const edgeTypes = new Set(graphData.edges.map((e) => e.rel_type));
+      setVisibleEdgeTypes(edgeTypes);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load graph');
+    } finally {
+      setLoading(false);
+    }
+  }, [limit]);
+
   // Initial load
   useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      setLoading(true);
-      setError(null);
-      try {
-        const [graphData, statsData] = await Promise.all([
-          fetchGraph(limit),
-          fetchGraphStats(),
-        ]);
-
-        if (cancelled) return;
-
-        setRawNodes(graphData.nodes);
-        setRawEdges(graphData.edges);
-        setTotalNodes(graphData.total_nodes);
-        setTotalEdges(graphData.total_edges);
-        setTruncated(graphData.truncated);
-        setStats(statsData);
-
-        // Initialize all labels/edge types as visible
-        const labels = new Set(graphData.nodes.map((n) => n.label));
-        setVisibleLabels(labels);
-        const edgeTypes = new Set(graphData.edges.map((e) => e.rel_type));
-        setVisibleEdgeTypes(edgeTypes);
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load graph');
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    load();
-    return () => { cancelled = true; };
-  }, [limit]);
+    reload();
+  }, [reload]);
 
   const toggleLabel = useCallback((label: string) => {
     setVisibleLabels((prev) => {
@@ -200,8 +196,8 @@ export function useGraphData(limit: number = 500): UseGraphDataReturn {
         }
         return [...prev, ...newEdges];
       });
-    } catch {
-      // Silently fail for expansion
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to expand node');
     }
   }, []);
 
@@ -220,6 +216,7 @@ export function useGraphData(limit: number = 500): UseGraphDataReturn {
     setSearchTerm,
     matchedNodeIds,
     expandNode,
+    reload,
     allLabels,
     allEdgeTypes,
     rawNodes,

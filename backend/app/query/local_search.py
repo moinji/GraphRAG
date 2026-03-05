@@ -9,9 +9,8 @@ import logging
 import re
 import time
 
-from neo4j import GraphDatabase
-
 from app.config import settings
+from app.db.neo4j_client import get_driver
 from app.exceptions import LocalSearchError
 from app.models.schemas import QueryResponse
 from app.query.local_prompts import (
@@ -178,14 +177,10 @@ def _execute_neo4j(cypher: str, params: dict | None = None) -> list[dict]:
     """Execute Cypher against Neo4j."""
     params = params or {}
     try:
-        driver = GraphDatabase.driver(
-            settings.neo4j_uri,
-            auth=(settings.neo4j_user, settings.neo4j_password),
-        )
+        driver = get_driver()
         with driver.session() as session:
             result = session.run(cypher, **params)
             records = [dict(r) for r in result]
-        driver.close()
         return records
     except Exception as e:
         raise LocalSearchError(f"Neo4j execution failed: {e}")

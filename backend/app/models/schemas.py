@@ -171,6 +171,7 @@ class CSVUploadResponse(BaseModel):
     csv_session_id: str
     tables: list[CSVTableSummary]
     errors: list[str] = []
+    warnings: list[str] = []
 
 
 # ── Query Result (v0 demo) ─────────────────────────────────────────
@@ -276,3 +277,22 @@ class GraphStats(BaseModel):
     edge_counts: dict[str, int] = {}
     total_nodes: int = 0
     total_edges: int = 0
+
+
+class GraphResetResponse(BaseModel):
+    deleted_nodes: int = 0
+    deleted_edges: int = 0
+
+
+# ── Health Check ────────────────────────────────────────────────
+
+class ServiceHealth(BaseModel):
+    status: str
+    latency_ms: float | None = None
+    detail: str | None = None
+
+
+class HealthCheckResponse(BaseModel):
+    status: str
+    neo4j: ServiceHealth
+    postgres: ServiceHealth

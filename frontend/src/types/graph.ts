@@ -29,3 +29,8 @@ export interface GraphStats {
   total_nodes: number;
   total_edges: number;
 }
+
+export interface GraphResetResponse {
+  deleted_nodes: number;
+  deleted_edges: number;
+}

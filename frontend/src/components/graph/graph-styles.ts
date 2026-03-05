@@ -1,23 +1,39 @@
-/** Color map for node labels. */
-export const NODE_COLORS: Record<string, string> = {
+/** Preferred colors for known node labels. */
+const KNOWN_COLORS: Record<string, string> = {
   Customer: '#6366f1',    // indigo
   Product: '#10b981',     // emerald
   Order: '#f59e0b',       // amber
-  OrderItem: '#f97316',   // orange
   Category: '#8b5cf6',    // violet
   Review: '#ec4899',      // pink
   Supplier: '#06b6d4',    // cyan
   Payment: '#14b8a6',     // teal
-  Shipment: '#3b82f6',    // blue
+  Coupon: '#ef4444',      // red
   Address: '#64748b',     // slate
-  Inventory: '#84cc16',   // lime
-  Promotion: '#ef4444',   // red
 };
 
-const DEFAULT_NODE_COLOR = '#94a3b8'; // slate-400
+const DEFAULT_NODE_COLOR = '#94a3b8'; // slate-400 fallback
+
+/** Extended palette for dynamically discovered labels. */
+const PALETTE = [
+  '#f97316', '#3b82f6', '#84cc16', '#e11d48', '#a855f7',
+  '#0891b2', '#d97706', '#059669', '#7c3aed', '#dc2626',
+  '#0284c7', '#65a30d', '#c026d3', '#ea580c', '#4f46e5',
+];
+
+const _dynamicMap = new Map<string, string>();
 
 export function getNodeColor(label: string): string {
-  return NODE_COLORS[label] ?? DEFAULT_NODE_COLOR;
+  if (KNOWN_COLORS[label]) return KNOWN_COLORS[label];
+  if (_dynamicMap.has(label)) return _dynamicMap.get(label)!;
+  const idx = _dynamicMap.size % PALETTE.length;
+  const color = PALETTE[idx];
+  _dynamicMap.set(label, color);
+  return color;
+}
+
+/** Snapshot of all assigned colors (known + dynamic). */
+export function getAllNodeColors(): Record<string, string> {
+  return { ...KNOWN_COLORS, ...Object.fromEntries(_dynamicMap) };
 }
 
 /** Build a Cytoscape stylesheet for the graph. */
@@ -54,8 +70,8 @@ export function buildStylesheet(_activeLabels: Set<string>) {
     },
   ];
 
-  // Per-label color styles
-  for (const [label, color] of Object.entries(NODE_COLORS)) {
+  // Per-label color styles (known + dynamically assigned)
+  for (const [label, color] of Object.entries(getAllNodeColors())) {
     nodeStyles.push({
       selector: `node[label="${label}"]`,
       style: {

@@ -254,6 +254,17 @@ def get_template(template_id: str) -> TemplateSpec | None:
     return REGISTRY.get(template_id)
 
 
+def get_cypher(template_id: str) -> str:
+    """Return the raw Cypher string for a template ID.
+
+    Raises KeyError if not found.
+    """
+    spec = REGISTRY.get(template_id)
+    if spec is None:
+        raise KeyError(f"Unknown template: {template_id}")
+    return spec.cypher
+
+
 def render_cypher(template_id: str, slots: dict[str, str]) -> str:
     """Fill label/rel slots in a template. Returns the formatted Cypher string."""
     spec = REGISTRY.get(template_id)

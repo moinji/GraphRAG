@@ -70,14 +70,14 @@ export default function UploadPage({ onGenerated }: UploadPageProps) {
     <div className="max-w-4xl mx-auto space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Upload DDL</CardTitle>
+          <CardTitle>DDL 업로드</CardTitle>
           <CardDescription>
-            Upload a SQL DDL file to parse the schema and generate an ontology.
+            SQL DDL 파일을 업로드하여 스키마를 분석하고 온톨로지를 생성합니다.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="ddl-file">DDL File (.sql)</Label>
+            <Label htmlFor="ddl-file">DDL 파일 (.sql)</Label>
             <Input
               id="ddl-file"
               type="file"
@@ -90,7 +90,7 @@ export default function UploadPage({ onGenerated }: UploadPageProps) {
             />
           </div>
           <Button onClick={handleUpload} disabled={!file || loading}>
-            {loading && !erd ? 'Uploading...' : 'Upload'}
+            {loading && !erd ? '업로드 중...' : '업로드'}
           </Button>
         </CardContent>
       </Card>
@@ -100,16 +100,16 @@ export default function UploadPage({ onGenerated }: UploadPageProps) {
           {/* Summary counts */}
           <Card>
             <CardHeader>
-              <CardTitle>ERD Summary</CardTitle>
+              <CardTitle>ERD 요약 (Summary)</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="rounded-lg border p-3">
-                  <p className="text-muted-foreground">Tables</p>
+                  <p className="text-muted-foreground">테이블</p>
                   <p className="text-2xl font-bold">{erd.tables.length}</p>
                 </div>
                 <div className="rounded-lg border p-3">
-                  <p className="text-muted-foreground">Foreign Keys</p>
+                  <p className="text-muted-foreground">외래키 (FK)</p>
                   <p className="text-2xl font-bold">{erd.foreign_keys.length}</p>
                 </div>
               </div>
@@ -119,15 +119,15 @@ export default function UploadPage({ onGenerated }: UploadPageProps) {
           {/* Tables detail */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Tables</CardTitle>
+              <CardTitle className="text-base">테이블</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Table Name</TableHead>
-                      <TableHead className="text-center">Columns</TableHead>
+                      <TableHead>테이블명</TableHead>
+                      <TableHead className="text-center">컬럼</TableHead>
                       <TableHead className="text-center">PK</TableHead>
                       <TableHead className="text-center">FKs</TableHead>
                       <TableHead />
@@ -173,16 +173,16 @@ export default function UploadPage({ onGenerated }: UploadPageProps) {
                     {/* Columns */}
                     <div>
                       <h4 className="text-sm font-medium mb-2">
-                        Columns — <code className="text-xs">{table.name}</code>
+                        컬럼 — <code className="text-xs">{table.name}</code>
                       </h4>
                       <div className="rounded-md border">
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead>Column</TableHead>
-                              <TableHead>Type</TableHead>
+                              <TableHead>컬럼</TableHead>
+                              <TableHead>타입</TableHead>
                               <TableHead className="text-center">Nullable</TableHead>
-                              <TableHead className="text-center">Flags</TableHead>
+                              <TableHead className="text-center">플래그</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -215,13 +215,13 @@ export default function UploadPage({ onGenerated }: UploadPageProps) {
                     {/* FKs for this table */}
                     {tableFks.length > 0 && (
                       <div>
-                        <h4 className="text-sm font-medium mb-2">Foreign Keys</h4>
+                        <h4 className="text-sm font-medium mb-2">외래키 (FK)</h4>
                         <div className="rounded-md border">
                           <Table>
                             <TableHeader>
                               <TableRow>
-                                <TableHead>Column</TableHead>
-                                <TableHead>References</TableHead>
+                                <TableHead>컬럼</TableHead>
+                                <TableHead>참조</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -247,17 +247,17 @@ export default function UploadPage({ onGenerated }: UploadPageProps) {
           {/* FK relationships overview */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Foreign Key Relationships</CardTitle>
+              <CardTitle className="text-base">외래키 관계 (FK Relationships)</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Source</TableHead>
+                      <TableHead>소스</TableHead>
                       <TableHead />
-                      <TableHead>Target</TableHead>
-                      <TableHead>Column Mapping</TableHead>
+                      <TableHead>타겟</TableHead>
+                      <TableHead>컬럼 매핑</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -286,11 +286,11 @@ export default function UploadPage({ onGenerated }: UploadPageProps) {
                   checked={includeLlm}
                   onCheckedChange={(checked) => setIncludeLlm(checked === true)}
                 />
-                <Label htmlFor="include-llm">Include LLM enrichment</Label>
+                <Label htmlFor="include-llm">LLM 보강 포함</Label>
               </div>
 
               <Button onClick={handleGenerate} disabled={loading} size="lg">
-                {loading ? 'Generating...' : 'Generate Ontology'}
+                {loading ? '생성 중...' : '온톨로지 생성'}
               </Button>
             </CardContent>
           </Card>

@@ -23,7 +23,7 @@ from app.ddl_parser.parser import parse_ddl_file
 from app.ontology.fk_rule_engine import build_ontology
 from app.data_generator.generator import generate_sample_data, verify_fk_integrity
 from app.kg_builder.loader import load_to_neo4j
-from app.query.executor import execute_demo_queries
+from app.query.pipeline import run_query
 
 
 def _sep(title: str):
@@ -93,8 +93,13 @@ def main():
 
     # ── Step 5: Q&A Demo ──────────────────────────────────────────
     _sep("Step 5: Q&A Demo")
-    results = execute_demo_queries(neo4j_uri, neo4j_user, neo4j_password)
-    for i, r in enumerate(results, 1):
+    demo_questions = [
+        "고객 김민수가 주문한 상품은?",
+        "김민수가 주문한 상품과 같은 카테고리에서 리뷰 평점 Top 3 상품은?",
+        "가장 많이 팔린 카테고리 Top 3는?",
+    ]
+    for i, question in enumerate(demo_questions, 1):
+        r = run_query(question, mode="a")
         print(f"\n  Q{i}: {r.question}")
         print(f"  A{i}: {r.answer}")
         print(f"  Template: {r.template_id}")

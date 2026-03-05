@@ -26,7 +26,7 @@ export default function GraphFilterSidebar({
       {/* Node types */}
       <div className="px-3 py-3">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-2">
-          Node Types
+          노드 타입
         </h3>
         <ul className="space-y-1">
           {allLabels.map((label) => (
@@ -55,7 +55,7 @@ export default function GraphFilterSidebar({
       {/* Edge types */}
       <div className="border-t px-3 py-3">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-2">
-          Edge Types
+          엣지 타입
         </h3>
         <ul className="space-y-1">
           {allEdgeTypes.map((edgeType) => (

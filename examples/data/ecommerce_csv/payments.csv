@@ -1,0 +1,9 @@
+id,order_id,method,amount,status,paid_at
+1,1,credit_card,3500000,completed,2024-01-15
+2,2,credit_card,323100,completed,2024-02-20
+3,3,bank_transfer,2348000,completed,2024-01-20
+4,4,credit_card,3536000,completed,2024-03-01
+5,5,credit_card,3959000,completed,2024-02-10
+6,6,kakaopay,1521000,completed,2024-03-05
+7,7,bank_transfer,2608000,completed,2024-01-25
+8,8,credit_card,699000,completed,2024-03-10

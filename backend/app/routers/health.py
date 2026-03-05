@@ -8,23 +8,27 @@ from typing import Any
 from fastapi import APIRouter
 
 from app.config import settings
+from app.models.schemas import HealthCheckResponse
 
 router = APIRouter(prefix="/api/v1", tags=["health"])
 
 
 def _check_neo4j() -> dict[str, Any]:
     try:
-        from neo4j import GraphDatabase
+        from neo4j.exceptions import ServiceUnavailable
+
+        from app.db.neo4j_client import get_driver
 
         t0 = time.perf_counter()
-        driver = GraphDatabase.driver(
-            settings.neo4j_uri,
-            auth=(settings.neo4j_user, settings.neo4j_password),
-        )
+        driver = get_driver()
         driver.verify_connectivity()
         latency = round((time.perf_counter() - t0) * 1000, 1)
-        driver.close()
         return {"status": "ok", "latency_ms": latency}
+    except ServiceUnavailable as e:
+        detail = str(e)
+        if settings.neo4j_uri.startswith("neo4j+s://"):
+            detail += " — AuraDB instance may be paused or resuming. Check console.neo4j.io"
+        return {"status": "error", "detail": detail}
     except Exception as e:
         return {"status": "error", "detail": str(e)}
 
@@ -50,30 +54,14 @@ def _check_postgres() -> dict[str, Any]:
         return {"status": "error", "detail": str(e)}
 
 
-def _check_redis() -> dict[str, Any]:
-    try:
-        import redis as redis_lib
-
-        t0 = time.perf_counter()
-        r = redis_lib.from_url(settings.redis_url, socket_connect_timeout=3)
-        r.ping()
-        latency = round((time.perf_counter() - t0) * 1000, 1)
-        r.close()
-        return {"status": "ok", "latency_ms": latency}
-    except Exception as e:
-        return {"status": "error", "detail": str(e)}
-
-
-@router.get("/health")
+@router.get("/health", response_model=HealthCheckResponse)
 def health_check() -> dict[str, Any]:
     neo4j = _check_neo4j()
     postgres = _check_postgres()
-    redis = _check_redis()
 
-    all_ok = all(s["status"] == "ok" for s in [neo4j, postgres, redis])
+    all_ok = all(s["status"] == "ok" for s in [neo4j, postgres])
     return {
         "status": "healthy" if all_ok else "degraded",
         "neo4j": neo4j,
         "postgres": postgres,
-        "redis": redis,
     }

@@ -2,15 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { sendQuery } from '@/api/client';
+import { DEMO_QUESTIONS } from '@/constants';
 import type { ChatMessage, QueryResponse } from '@/types/ontology';
-
-const DEMO_QUESTIONS = [
-  { label: 'Q1', text: '고객 김민수가 주문한 상품은?' },
-  { label: 'Q2', text: '김민수가 주문한 상품과 같은 카테고리에서 리뷰 평점 Top 3 상품은?' },
-  { label: 'Q3', text: '가장 많이 팔린 카테고리 Top 3는?' },
-  { label: 'Q4', text: '김민수와 이영희가 공통으로 구매한 상품은?' },
-  { label: 'Q5', text: '쿠폰 사용 주문과 미사용 주문의 평균 금액 비교' },
-];
 
 interface QueryPageProps {
   onBack: () => void;
@@ -58,7 +51,7 @@ export default function QueryPage({ onBack }: QueryPageProps) {
     <div className="flex flex-col h-[calc(100vh-8rem)]">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold">Knowledge Graph Q&A</h2>
+        <h2 className="text-xl font-semibold">지식 그래프 Q&A</h2>
         <div className="flex items-center gap-3">
           {/* A/B Mode Toggle */}
           <div className="flex items-center gap-1 rounded-lg border p-1">
@@ -70,7 +63,7 @@ export default function QueryPage({ onBack }: QueryPageProps) {
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              A Template
+              A 템플릿
             </button>
             <button
               onClick={() => setMode('b')}
@@ -80,14 +73,14 @@ export default function QueryPage({ onBack }: QueryPageProps) {
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              B Local
+              B 로컬
             </button>
           </div>
           <button
             onClick={onBack}
             className="text-sm text-muted-foreground hover:text-foreground"
           >
-            &larr; Back to Review
+            &larr; 리뷰로 돌아가기
           </button>
         </div>
       </div>
@@ -155,6 +148,7 @@ export default function QueryPage({ onBack }: QueryPageProps) {
             }
           }}
           placeholder="질문을 입력하세요..."
+          aria-label="질문 입력"
           rows={2}
           className="flex-1 rounded-lg border p-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
           disabled={sending}
@@ -164,7 +158,7 @@ export default function QueryPage({ onBack }: QueryPageProps) {
           disabled={!input.trim() || sending}
           className="self-end"
         >
-          {sending ? '...' : 'Send'}
+          {sending ? '...' : '전송'}
         </Button>
       </div>
     </div>
@@ -189,7 +183,7 @@ function AssistantDetail({ data }: { data: QueryResponse }) {
               : 'border-blue-500 text-blue-600'
           }`}
         >
-          {data.mode === 'b' ? 'B Local' : 'A Template'}
+          {data.mode === 'b' ? 'B 로컬' : 'A 템플릿'}
         </Badge>
         {data.template_id && (
           <Badge variant="secondary" className="text-xs">
@@ -233,7 +227,7 @@ function AssistantDetail({ data }: { data: QueryResponse }) {
             onClick={() => setShowCypher(!showCypher)}
             className="text-xs text-muted-foreground hover:text-foreground"
           >
-            {showCypher ? '▼ Cypher' : '▶ Cypher'}
+            {showCypher ? '▼ Cypher (쿼리)' : '▶ Cypher (쿼리)'}
           </button>
           {showCypher && (
             <pre className="mt-1 rounded bg-background p-2 text-xs overflow-x-auto border">
@@ -250,7 +244,7 @@ function AssistantDetail({ data }: { data: QueryResponse }) {
             onClick={() => setShowSubgraph(!showSubgraph)}
             className="text-xs text-muted-foreground hover:text-foreground"
           >
-            {showSubgraph ? '▼' : '▶'} Subgraph Context
+            {showSubgraph ? '▼' : '▶'} 서브그래프 컨텍스트
           </button>
           {showSubgraph && (
             <pre className="mt-1 rounded bg-background p-2 text-xs overflow-x-auto border whitespace-pre-wrap">
@@ -267,7 +261,7 @@ function AssistantDetail({ data }: { data: QueryResponse }) {
             onClick={() => setShowPaths(!showPaths)}
             className="text-xs text-muted-foreground hover:text-foreground"
           >
-            {showPaths ? '▼' : '▶'} Evidence Paths ({data.paths.length})
+            {showPaths ? '▼' : '▶'} 근거 경로 ({data.paths.length})
           </button>
           {showPaths && (
             <ul className="mt-1 space-y-1 text-xs">

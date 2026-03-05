@@ -57,6 +57,7 @@ export default function NodeDetailPanel({
         </div>
         <button
           onClick={onClose}
+          aria-label="닫기"
           className="text-muted-foreground hover:text-foreground text-lg leading-none"
         >
           &times;
@@ -74,7 +75,7 @@ export default function NodeDetailPanel({
         {displayProps.length > 0 && (
           <div className="border-b px-4 py-3">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">
-              Properties
+              속성 (Properties)
             </h4>
             <dl className="space-y-1.5">
               {displayProps.map(([key, value]) => (
@@ -91,14 +92,14 @@ export default function NodeDetailPanel({
         <div className="px-4 py-3">
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase">
-              Connections ({neighbors.length})
+              연결 ({neighbors.length})
             </h4>
             <Button variant="outline" size="xs" onClick={() => onExpand(node.id)}>
-              Expand
+              확장
             </Button>
           </div>
           {neighbors.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No connections</p>
+            <p className="text-sm text-muted-foreground">연결 없음</p>
           ) : (
             <ul className="space-y-1.5">
               {neighbors.map((nb, i) => (
