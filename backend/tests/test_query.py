@@ -1,4 +1,4 @@
-"""Query pipeline tests — 19 cases."""
+"""Query pipeline tests — 27 cases."""
 
 from __future__ import annotations
 
@@ -314,3 +314,106 @@ def test_cache_miss():
 
     resp = get_cached_answer("오늘 날씨가 어때?")
     assert resp is None
+
+
+# ════════════════════════════════════════════════════════════════════
+#  English Rule Router (P3-20 Multilingual)
+# ════════════════════════════════════════════════════════════════════
+
+
+def test_rules_en_q1():
+    """#20: English Q1 'What products did X order?' matches two_hop."""
+    from app.query.router_rules import classify_by_rules
+
+    result = classify_by_rules("What products did 김민수 order?")
+    assert result is not None
+    tid, route, slots, params = result
+    assert tid == "two_hop"
+    assert route == "cypher_traverse"
+    assert params["val"] == "김민수"
+
+
+def test_rules_en_q3():
+    """#21: English Q3 'Top 3 best-selling categories' matches agg_with_rel."""
+    from app.query.router_rules import classify_by_rules
+
+    result = classify_by_rules("Top 3 best-selling categories?")
+    assert result is not None
+    tid, route, slots, params = result
+    assert tid == "agg_with_rel"
+    assert route == "cypher_agg"
+    assert params["limit"] == 3
+
+
+def test_rules_en_q5():
+    """#22: English Q5 'Coupon used vs unused' matches custom_q5."""
+    from app.query.router_rules import classify_by_rules
+
+    result = classify_by_rules("Coupon used vs unused average amount comparison")
+    assert result is not None
+    tid, route, slots, params = result
+    assert tid == "custom_q5"
+    assert route == "cypher_agg"
+
+
+def test_rules_en_q4():
+    """#23: English Q4 'products X and Y bought' matches custom_q4."""
+    from app.query.router_rules import classify_by_rules
+
+    result = classify_by_rules("products 김민수 and 이영희 bought")
+    assert result is not None
+    tid, route, slots, params = result
+    assert tid == "custom_q4"
+    assert params["name1"] == "김민수"
+    assert params["name2"] == "이영희"
+
+
+# ════════════════════════════════════════════════════════════════════
+#  Bilingual Answer Generation (P3-20)
+# ════════════════════════════════════════════════════════════════════
+
+
+def test_answer_korean():
+    """#24: Korean question gets Korean answer."""
+    from app.query.pipeline import _generate_answer
+
+    answer = _generate_answer(
+        "고객 김민수가 주문한 상품은?",
+        [{"result": "맥북프로"}],
+        "two_hop",
+        {"start_label": "Customer"},
+        {"val": "김민수"},
+    )
+    assert "김민수" in answer
+    assert "주문한 상품" in answer
+
+
+def test_answer_english():
+    """#25: English question gets English answer."""
+    from app.query.pipeline import _generate_answer
+
+    answer = _generate_answer(
+        "What products did Alice order?",
+        [{"result": "MacBookPro"}],
+        "two_hop",
+        {"start_label": "Customer"},
+        {"val": "Alice"},
+    )
+    assert "Products ordered by" in answer
+    assert "MacBookPro" in answer
+
+
+def test_unsupported_english():
+    """#26: English unsupported question gets English message."""
+    from app.query.pipeline import _is_korean
+
+    assert _is_korean("What is the weather?") is False
+    assert _is_korean("고객 김민수") is True
+
+
+def test_no_results_english():
+    """#27: English question with no results gets English message."""
+    from app.query.pipeline import _generate_answer
+
+    answer = _generate_answer("What products did X order?", [], "two_hop", {}, {})
+    assert "No results found" in answer

@@ -12,6 +12,15 @@ _MIGRATIONS = [
     ALTER TABLE ontology_versions
     ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'draft' NOT NULL;
     """,
+    # Multi-tenancy: tenant_id columns
+    """
+    ALTER TABLE ontology_versions
+    ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(64) DEFAULT '_default_' NOT NULL;
+    """,
+    """
+    ALTER TABLE kg_builds
+    ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(64) DEFAULT '_default_' NOT NULL;
+    """,
 ]
 
 
@@ -20,12 +29,11 @@ def run_migrations() -> None:
     try:
         from app.db.pg_client import _get_conn
 
-        conn = _get_conn()
-        with conn:
-            with conn.cursor() as cur:
-                for sql in _MIGRATIONS:
-                    cur.execute(sql)
-        conn.close()
+        with _get_conn() as conn:
+            with conn:
+                with conn.cursor() as cur:
+                    for sql in _MIGRATIONS:
+                        cur.execute(sql)
         logger.info("Migrations applied successfully")
     except Exception:
         logger.warning("Failed to run migrations", exc_info=True)

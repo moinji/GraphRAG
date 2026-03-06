@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import type cytoscape from 'cytoscape';
 import GraphCanvas from '@/components/graph/GraphCanvas';
 import GraphToolbar from '@/components/graph/GraphToolbar';
@@ -11,6 +11,18 @@ import { sendQuery, resetGraph } from '@/api/client';
 import { GRAPH_DEFAULT_LIMIT } from '@/constants';
 
 type ViewMode = 'classic' | 'radial';
+
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < breakpoint : false,
+  );
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < breakpoint);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [breakpoint]);
+  return isMobile;
+}
 
 interface ExplorePageProps {
   onBack: () => void;
@@ -44,11 +56,13 @@ export default function ExplorePage({ onBack }: ExplorePageProps) {
     setHighlightNodeIds,
   } = useGraphData(GRAPH_DEFAULT_LIMIT);
 
+  const isMobile = useIsMobile();
   const [viewMode, setViewMode] = useState<ViewMode>('classic');
   const [layout, setLayout] = useState<LayoutName>('cose');
   const [demoQueryLoading, setDemoQueryLoading] = useState(false);
   const [demoAnswer, setDemoAnswer] = useState<string | null>(null);
   const [resetLoading, setResetLoading] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const cyRef = useRef<cytoscape.Core | null>(null);
 
   const handleZoomIn = useCallback(() => {
@@ -196,22 +210,35 @@ export default function ExplorePage({ onBack }: ExplorePageProps) {
 
       {viewMode === 'classic' && (
         <>
-          <GraphToolbar
-            searchTerm={searchTerm}
-            onSearchChange={setSearchTerm}
-            layout={layout}
-            onLayoutChange={setLayout}
-            onZoomIn={handleZoomIn}
-            onZoomOut={handleZoomOut}
-            onFitView={handleFitView}
-            totalNodes={totalNodes}
-            totalEdges={totalEdges}
-            truncated={truncated}
-            onDemoQuestion={handleDemoQuestion}
-            demoQueryLoading={demoQueryLoading}
-            onReset={handleReset}
-            resetLoading={resetLoading}
-          />
+          <div className="flex items-center gap-1 flex-wrap">
+            {/* Mobile sidebar toggle */}
+            {isMobile && (
+              <button
+                onClick={() => setSidebarOpen((v) => !v)}
+                className="ml-2 rounded-md border px-2 py-1 text-xs hover:bg-accent"
+              >
+                {sidebarOpen ? '필터 닫기' : '필터'}
+              </button>
+            )}
+            <div className="flex-1 min-w-0">
+              <GraphToolbar
+                searchTerm={searchTerm}
+                onSearchChange={setSearchTerm}
+                layout={layout}
+                onLayoutChange={setLayout}
+                onZoomIn={handleZoomIn}
+                onZoomOut={handleZoomOut}
+                onFitView={handleFitView}
+                totalNodes={totalNodes}
+                totalEdges={totalEdges}
+                truncated={truncated}
+                onDemoQuestion={handleDemoQuestion}
+                demoQueryLoading={demoQueryLoading}
+                onReset={handleReset}
+                resetLoading={resetLoading}
+              />
+            </div>
+          </div>
 
           {/* Demo answer banner */}
           {demoAnswer && (
@@ -227,17 +254,31 @@ export default function ExplorePage({ onBack }: ExplorePageProps) {
           )}
 
           {/* Main content area */}
-          <div className="flex flex-1 overflow-hidden">
-            {/* Left: Filter sidebar */}
-            <GraphFilterSidebar
-              allLabels={allLabels}
-              visibleLabels={visibleLabels}
-              onToggleLabel={toggleLabel}
-              allEdgeTypes={allEdgeTypes}
-              visibleEdgeTypes={visibleEdgeTypes}
-              onToggleEdgeType={toggleEdgeType}
-              stats={stats}
-            />
+          <div className="flex flex-1 overflow-hidden relative">
+            {/* Left: Filter sidebar — hidden on mobile, toggleable */}
+            {(!isMobile || sidebarOpen) && (
+              <div className={isMobile
+                ? 'absolute inset-y-0 left-0 z-20 shadow-lg'
+                : ''
+              }>
+                <GraphFilterSidebar
+                  allLabels={allLabels}
+                  visibleLabels={visibleLabels}
+                  onToggleLabel={toggleLabel}
+                  allEdgeTypes={allEdgeTypes}
+                  visibleEdgeTypes={visibleEdgeTypes}
+                  onToggleEdgeType={toggleEdgeType}
+                  stats={stats}
+                />
+              </div>
+            )}
+            {/* Mobile sidebar backdrop */}
+            {isMobile && sidebarOpen && (
+              <div
+                className="absolute inset-0 z-10 bg-black/20"
+                onClick={() => setSidebarOpen(false)}
+              />
+            )}
 
             {/* Center: Graph canvas */}
             <div className="flex-1 relative">
@@ -254,16 +295,21 @@ export default function ExplorePage({ onBack }: ExplorePageProps) {
               </div>
             </div>
 
-            {/* Right: Detail panel (conditional) */}
+            {/* Right: Detail panel — overlay on mobile */}
             {selectedNode && (
-              <NodeDetailPanel
-                node={selectedNode}
-                edges={rawEdges}
-                allNodes={rawNodes}
-                onClose={() => setSelectedNode(null)}
-                onExpand={expandNode}
-                onNavigate={handleNavigate}
-              />
+              <div className={isMobile
+                ? 'absolute inset-y-0 right-0 z-20 shadow-lg'
+                : ''
+              }>
+                <NodeDetailPanel
+                  node={selectedNode}
+                  edges={rawEdges}
+                  allNodes={rawNodes}
+                  onClose={() => setSelectedNode(null)}
+                  onExpand={expandNode}
+                  onNavigate={handleNavigate}
+                />
+              </div>
             )}
           </div>
         </>

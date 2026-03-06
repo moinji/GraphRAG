@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <a href="http://35.216.107.229/">🌐 Live Demo</a> · <a href="https://github.com/moinji/GraphRAG">📦 GitHub</a> · <a href="docs/PLAN.md">📋 개발 계획서</a>
+  <a href="http://35.216.107.229/">🌐 Live Demo</a> · <a href="https://github.com/moinji/GraphRAG">📦 GitHub</a> · <a href="docs/PoC_개발계획서.md">📋 개발 계획서</a>
 </p>
 
 ---
@@ -36,7 +36,7 @@ GraphRAG Ontology Builder는 데이터베이스 스키마(DDL)로부터 **온톨
 | **버전 관리** | Draft → Approved 워크플로, 평가 지표 자동 계산 |
 | **KG 자동 빌드** | 승인된 온톨로지로 Neo4j에 Knowledge Graph 빌드 |
 | **하이브리드 Q&A** | Mode A (템플릿 기반, 빠름) / Mode B (LLM 로컬서치, 정확) |
-| **그래프 시각화** | Cytoscape.js 기반 인터랙티브 탐색, 필터링, 이웃 확장 |
+| **그래프 시각화** | Classic (Cytoscape.js) + Radial Map (D3.js) 듀얼 뷰 |
 | **CSV 임포트** | CSV 파일 업로드 후 스키마 검증 및 KG 빌드에 활용 |
 | **A/B 평가** | 50개 골든 Q&A 기반 정확도·비용 비교 |
 
@@ -52,7 +52,7 @@ graph TB
         Upload["Upload Page"]
         Review["Review Page"]
         Query["Query Page"]
-        Explore["Explore Page"]
+        Explore["Explore Page\n(Classic / Radial)"]
         Upload -->|Generate| Review
         Review -->|Build KG| Query
         Review -.->|Explore| Explore
@@ -92,7 +92,7 @@ graph TB
 
 | Layer | Technology |
 |-------|-----------|
-| **Frontend** | React 19, TypeScript 5.9, Vite 7, Tailwind CSS 4, shadcn/ui, Cytoscape.js |
+| **Frontend** | React 19, TypeScript 5.9, Vite 7, Tailwind CSS 4, shadcn/ui, Cytoscape.js, D3.js |
 | **Backend** | Python 3.11, FastAPI, SQLGlot, neo4j-driver, Anthropic SDK |
 | **Graph DB** | Neo4j 5 Community |
 | **Metadata DB** | PostgreSQL 16 |
@@ -149,15 +149,11 @@ npm run dev
 
 ### Step 1: DDL 업로드
 
-[TODO: 스크린샷]
-
 1. `.sql` 파일을 업로드합니다
 2. 파싱된 ERD 결과(테이블, 컬럼, PK/FK)를 확인합니다
 3. LLM 보강 여부를 선택하고 **Generate Ontology** 를 클릭합니다
 
 ### Step 2: 온톨로지 리뷰
-
-[TODO: 스크린샷]
 
 1. **Auto / Review** 모드를 전환합니다
 2. Review 모드에서 노드·관계를 편집합니다 (추가, 수정, 삭제, 방향 반전)
@@ -166,20 +162,17 @@ npm run dev
 
 ### Step 3: Q&A 질의
 
-[TODO: 스크린샷]
-
 1. 데모 질문을 클릭하거나 직접 질문을 입력합니다
 2. **Mode A** (템플릿 기반, 빠름) / **Mode B** (LLM 로컬서치, 정확) 전환
 3. 답변과 함께 Cypher 쿼리, Evidence Path를 확인합니다
 
 ### Step 4: 그래프 탐색 (Explore)
 
-[TODO: 스크린샷]
-
 1. 전체 Knowledge Graph를 시각화합니다
-2. 노드 검색, 라벨/엣지 타입별 필터링을 합니다
-3. 노드 클릭 → 상세 정보 확인 + 이웃 노드 확장
-4. 레이아웃 전환: **cose** (물리 시뮬레이션) / **dagre** (계층형) / **circular** (원형)
+2. **Classic** (Cytoscape.js) / **Radial Map** (D3.js) 뷰를 토글로 전환합니다
+3. 노드 검색, 라벨/엣지 타입별 필터링을 합니다
+4. **Classic 뷰**: 레이아웃 전환 (cose / dagre / circular), 이웃 노드 확장
+5. **Radial 뷰**: 노드 클릭으로 중심 토픽 전환, 브레드크럼 네비게이션, 호버 하이라이트
 
 ---
 
@@ -241,6 +234,10 @@ docker exec graphrag-neo4j cypher-shell \
 | `GET` | `/api/v1/graph/stats` | 그래프 통계 (노드/엣지 카운트) |
 | `GET` | `/api/v1/graph/full?limit=500` | 전체 그래프 데이터 조회 |
 | `GET` | `/api/v1/graph/neighbors/{node_id}` | 특정 노드의 이웃 조회 |
+| `DELETE` | `/api/v1/graph/reset` | 그래프 초기화 (전체 삭제) |
+| `GET` | `/api/v1/metrics/kpi-report` | KPI 리포트 (TTV, 정확도) |
+| `POST` | `/api/v1/evaluation/run` | A/B 평가 실행 |
+| `GET` | `/api/v1/evaluation/golden` | 골든 QA 데이터 조회 |
 
 ---
 
@@ -264,33 +261,36 @@ GraphRAG/
 │   │   ├── query/                   # 질의 엔진
 │   │   │   ├── pipeline.py          # 쿼리 파이프라인
 │   │   │   ├── router.py            # 라우팅 (규칙 / LLM)
-│   │   │   ├── executor.py          # Cypher 실행
 │   │   │   ├── local_search.py      # Mode B 로컬 서치
-│   │   │   └── template_registry.py # 쿼리 템플릿
+│   │   │   ├── template_registry.py # 쿼리 템플릿
+│   │   │   └── demo_cache.py        # 데모 질문 캐시
 │   │   ├── evaluation/              # A/B 평가
 │   │   ├── csv_import/              # CSV 임포트
+│   │   ├── db/                      # DB 클라이언트
+│   │   │   ├── neo4j_client.py      # Neo4j 드라이버 싱글턴
+│   │   │   ├── pg_client.py         # PostgreSQL CRUD
+│   │   │   └── kg_build_store.py    # KG 빌드 상태 저장
 │   │   └── routers/                 # API 라우터
 │   ├── tests/                       # pytest 테스트
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/                   # Upload, Review, Query, Explore
+│   │   ├── pages/                   # Upload, Review, Query, Explore, RadialExplore
 │   │   ├── components/
 │   │   │   ├── ui/                  # shadcn/ui 컴포넌트
-│   │   │   ├── graph/               # Cytoscape 그래프 컴포넌트
+│   │   │   ├── graph/               # Cytoscape 그래프 (Classic 뷰)
+│   │   │   ├── radial/              # D3.js 방사형 그래프 (Radial 뷰)
 │   │   │   └── review/              # 리뷰 페이지 컴포넌트
+│   │   ├── hooks/                   # 커스텀 훅 (use-radial-data 등)
 │   │   ├── api/client.ts            # API 클라이언트
+│   │   ├── constants.ts             # 공통 상수
 │   │   └── App.tsx                  # 앱 라우팅
 │   ├── Dockerfile
 │   └── nginx.conf
 ├── examples/
 │   ├── schemas/                     # 데모 DDL (ecommerce, accounting)
 │   └── data/                        # 샘플 CSV 데이터
-├── docs/
-│   ├── PLAN.md                      # 개발 계획서
-│   ├── deploy.md                    # GCP 배포 가이드
-│   ├── reports/                     # 주차별 보고서
-│   └── demo/                        # 데모 스크립트
+├── docs/                            # 프로젝트 문서
 ├── docker-compose.yml
 ├── .env.example
 └── requirements.txt
@@ -333,7 +333,7 @@ docker compose up --build -d
 
 ### GCP 배포
 
-자세한 가이드는 [docs/deploy.md](docs/deploy.md)를 참고하세요.
+자세한 가이드는 [docs/GCP_배포가이드.md](docs/GCP_배포가이드.md)를 참고하세요.
 
 ```bash
 # VM에서 실행
@@ -364,15 +364,19 @@ pytest -v
 - KG 빌드 (`test_kg_build.py`)
 - 쿼리 실행 (`test_query.py`, `test_local_search.py`)
 - CSV 임포트 (`test_csv_import.py`)
+- 그래프 API (`test_graph.py`)
 - A/B 평가 (`test_qa_evaluation.py`)
+- 회귀 테스트 (`test_regression.py`)
 - E2E 통합 (`test_e2e_integration.py`)
 
 ---
 
 ## 📚 문서
 
-- [개발 계획서](docs/PLAN.md)
-- [배포 가이드](docs/deploy.md)
-- [PoC 목표/KPI](docs/POC_DOD_KPI.md)
-- [주차별 보고서](docs/reports/)
-- [데모 스크립트](docs/demo/)
+- [개발 계획서](docs/PoC_개발계획서.md)
+- [GCP 배포 가이드](docs/GCP_배포가이드.md)
+- [PoC 성공기준 / KPI](docs/PoC_성공기준_KPI.md)
+- [Pipeline 동작가이드](docs/Pipeline_동작가이드.md)
+- [Neo4j 저장구조](docs/Neo4j_저장구조.md)
+- [ERD 다이어그램](docs/ERD_다이어그램.md)
+- [제품소개서](docs/제품소개서.md)

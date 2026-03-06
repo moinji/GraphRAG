@@ -1,0 +1,9 @@
+id,name,email,phone,department_id,role,hire_date
+1,김태호,taeho@devcamp.kr,010-1111-2222,1,instructor,2022-03-01
+2,박서연,seoyeon@devcamp.kr,010-2222-3333,1,instructor,2022-06-15
+3,이준혁,junhyuk@devcamp.kr,010-3333-4444,1,instructor,2023-01-10
+4,최예린,yerin@devcamp.kr,010-4444-5555,1,instructor,2023-04-01
+5,정민재,minjae@devcamp.kr,010-5555-6666,2,curriculum_developer,2022-01-15
+6,한소영,soyoung@devcamp.kr,010-6666-7777,3,career_coach,2022-09-01
+7,오진우,jinwoo@devcamp.kr,010-7777-8888,4,manager,2021-11-01
+8,윤하린,harin@devcamp.kr,010-8888-9999,1,instructor,2023-09-01

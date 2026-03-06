@@ -13,20 +13,23 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { uploadDDL, generateOntology } from '@/api/client';
+import { uploadDDL, generateOntology, approveVersion, startKGBuild, getKGBuildStatus } from '@/api/client';
+import { BUILD_POLL_INTERVAL_MS } from '@/constants';
 import type { ERDSchema, OntologyGenerateResponse } from '@/types/ontology';
 
 interface UploadPageProps {
   onGenerated: (result: OntologyGenerateResponse, erd: ERDSchema) => void;
+  onAutoComplete?: (result: OntologyGenerateResponse, erd: ERDSchema) => void;
 }
 
-export default function UploadPage({ onGenerated }: UploadPageProps) {
+export default function UploadPage({ onGenerated, onAutoComplete }: UploadPageProps) {
   const [file, setFile] = useState<File | null>(null);
   const [erd, setErd] = useState<ERDSchema | null>(null);
   const [includeLlm, setIncludeLlm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
+  const [autoStep, setAutoStep] = useState<string | null>(null);
 
   // FK lookup: target_table → source entries
   const fkBySource = new Map<string, { source_column: string; target_table: string; target_column: string }[]>();
@@ -63,6 +66,73 @@ export default function UploadPage({ onGenerated }: UploadPageProps) {
       setError(e instanceof Error ? e.message : 'Generation failed');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleAutoDemo() {
+    if (!file) return;
+    setLoading(true);
+    setError(null);
+    try {
+      // 1. DDL upload
+      setAutoStep('DDL 파싱 중...');
+      const erdResult = await uploadDDL(file);
+
+      // 2. Generate ontology (skip LLM for speed)
+      setAutoStep('온톨로지 생성 중...');
+      const genResult = await generateOntology(erdResult, true);
+
+      // 3. Auto approve
+      if (genResult.version_id) {
+        setAutoStep('자동 승인 중...');
+        await approveVersion(genResult.version_id);
+
+        // 4. Start KG build
+        setAutoStep('KG 빌드 시작...');
+        const build = await startKGBuild(genResult.version_id, erdResult);
+
+        // 5. Poll until complete
+        setAutoStep('KG 빌드 중...');
+        await new Promise<void>((resolve, reject) => {
+          const poll = setInterval(async () => {
+            try {
+              const status = await getKGBuildStatus(build.build_job_id);
+              if (status.progress?.current_step) {
+                const stepMsg: Record<string, string> = {
+                  data_generation: '데이터 생성 중...',
+                  fk_verification: 'FK 검증 중...',
+                  neo4j_load: 'Neo4j 적재 중...',
+                  completed: '완료!',
+                };
+                setAutoStep(stepMsg[status.progress.current_step] || 'KG 빌드 중...');
+              }
+              if (status.status === 'succeeded') {
+                clearInterval(poll);
+                resolve();
+              } else if (status.status === 'failed') {
+                clearInterval(poll);
+                reject(new Error(status.error?.message || 'Build failed'));
+              }
+            } catch (e) {
+              clearInterval(poll);
+              reject(e);
+            }
+          }, BUILD_POLL_INTERVAL_MS);
+        });
+      }
+
+      // 6. Go directly to Q&A page
+      setAutoStep('Q&A 페이지로 이동...');
+      if (onAutoComplete) {
+        onAutoComplete(genResult, erdResult);
+      } else {
+        onGenerated(genResult, erdResult);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Auto demo failed');
+    } finally {
+      setLoading(false);
+      setAutoStep(null);
     }
   }
 
@@ -289,9 +359,28 @@ export default function UploadPage({ onGenerated }: UploadPageProps) {
                 <Label htmlFor="include-llm">LLM 보강 포함</Label>
               </div>
 
-              <Button onClick={handleGenerate} disabled={loading} size="lg">
-                {loading ? '생성 중...' : '온톨로지 생성'}
-              </Button>
+              <div className="flex gap-3">
+                <Button onClick={handleGenerate} disabled={loading} size="lg">
+                  {loading && !autoStep ? '생성 중...' : '온톨로지 생성'}
+                </Button>
+                <Button
+                  onClick={handleAutoDemo}
+                  disabled={loading}
+                  size="lg"
+                  variant="default"
+                  className="bg-amber-600 hover:bg-amber-700"
+                >
+                  {autoStep || 'Auto Demo (1-Click)'}
+                </Button>
+              </div>
+              {autoStep && (
+                <div className="flex items-center gap-2">
+                  <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+                    <div className="h-full bg-amber-500 rounded-full animate-pulse" style={{ width: '60%' }} />
+                  </div>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">{autoStep}</span>
+                </div>
+              )}
             </CardContent>
           </Card>
         </>

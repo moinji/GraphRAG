@@ -286,6 +286,15 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
         <ModeToggle mode={mode} onModeChange={setMode} disabled={locked} />
       </div>
 
+      {/* Backend warnings */}
+      {result.warnings?.length > 0 && (
+        <div className="rounded-lg border border-amber-400 bg-amber-50 p-3 text-sm text-amber-800 space-y-1">
+          {result.warnings.map((w, i) => (
+            <p key={i}>{w}</p>
+          ))}
+        </div>
+      )}
+
       {/* Messages */}
       {error && (
         <div className="rounded-lg border border-destructive bg-destructive/10 p-3 text-sm text-destructive">

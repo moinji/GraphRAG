@@ -43,7 +43,7 @@ export default function RadialExplorePage({
     visibleNodes,
     visibleEdges,
     navigationHistory,
-    hoveredNodeId,
+    hoveredNodeId: _hoveredNodeId,
     setHoveredNodeId,
     navigateTo,
     navigateBack,

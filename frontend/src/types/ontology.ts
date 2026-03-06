@@ -90,6 +90,7 @@ export interface OntologyGenerateResponse {
   llm_diffs: LLMEnrichmentDiff[];
   version_id: number | null;
   stage: string;
+  warnings: string[];
 }
 
 // ── Version API ──────────────────────────────────────────────────
@@ -120,6 +121,9 @@ export interface KGBuildProgress {
   nodes_created: number;
   relationships_created: number;
   duration_seconds: number;
+  current_step: string;
+  step_number: number;
+  total_steps: number;
 }
 
 export interface KGBuildErrorDetail {
@@ -177,4 +181,27 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   data?: QueryResponse;
+  wisdomData?: WisdomResponse;
+}
+
+// ── DIKW Wisdom ─────────────────────────────────────────────────
+
+export interface DIKWLayer {
+  level: 'data' | 'information' | 'knowledge' | 'wisdom';
+  title: string;
+  content: string;
+  evidence: string[];
+}
+
+export interface WisdomResponse {
+  question: string;
+  intent: string;
+  dikw_layers: DIKWLayer[];
+  summary: string;
+  confidence: string;
+  action_items: string[];
+  related_queries: string[];
+  cypher_queries_used: string[];
+  latency_ms: number;
+  llm_tokens_used: number;
 }

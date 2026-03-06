@@ -1,4 +1,4 @@
-"""DDL parser unit tests — 10 cases."""
+"""DDL parser unit tests — 13 cases."""
 
 from __future__ import annotations
 
@@ -120,3 +120,55 @@ def test_non_create_ignored():
     erd = parse_ddl(ddl)
     assert len(erd.tables) == 1
     assert erd.tables[0].name == "fresh"
+
+
+# ── 11. Schema prefix stripped ──────────────────────────────────
+
+def test_schema_prefix_stripped():
+    ddl = """
+    CREATE TABLE public.customers (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL
+    );
+    CREATE TABLE myschema.orders (
+        id SERIAL PRIMARY KEY,
+        customer_id INT REFERENCES public.customers(id)
+    );
+    """
+    erd = parse_ddl(ddl)
+    names = [t.name for t in erd.tables]
+    assert "customers" in names
+    assert "orders" in names
+    assert not any("." in n for n in names)
+    assert len(erd.foreign_keys) == 1
+    assert erd.foreign_keys[0].target_table == "customers"
+
+
+# ── 12. VIEW and ENUM skipped ───────────────────────────────────
+
+def test_view_and_enum_skipped():
+    ddl = """
+    CREATE TYPE status_enum AS ENUM ('active', 'inactive');
+    CREATE VIEW customer_view AS SELECT * FROM customers;
+    CREATE TABLE customers (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100)
+    );
+    """
+    erd = parse_ddl(ddl)
+    assert len(erd.tables) == 1
+    assert erd.tables[0].name == "customers"
+
+
+# ── 13. IF NOT EXISTS handled ───────────────────────────────────
+
+def test_if_not_exists():
+    ddl = """
+    CREATE TABLE IF NOT EXISTS items (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(50) NOT NULL
+    );
+    """
+    erd = parse_ddl(ddl)
+    assert len(erd.tables) == 1
+    assert erd.tables[0].name == "items"

@@ -48,6 +48,16 @@ def enrich_ontology(
     except Exception as e:
         raise LLMEnrichmentError(f"OpenAI API call failed: {e}")
 
+    # Track token usage
+    if response.usage:
+        from app.llm_tracker import tracker
+        tracker.record(
+            caller="llm_enricher",
+            model=settings.openai_model,
+            input_tokens=response.usage.prompt_tokens,
+            output_tokens=response.usage.completion_tokens,
+        )
+
     # Extract text content
     raw_text = response.choices[0].message.content
 

@@ -144,15 +144,19 @@ def _parse_single_csv(
 
     table_name = filename[:-4].lower()  # strip .csv + normalize to lowercase
 
-    # Decode content (utf-8-sig strips BOM automatically)
-    try:
-        text = content.decode("utf-8-sig")
-    except UnicodeDecodeError:
+    # Decode content: try UTF-8 (with BOM), then CP949/EUC-KR for Korean Excel exports
+    text: str | None = None
+    for encoding in ("utf-8-sig", "utf-8", "cp949", "euc-kr"):
         try:
-            text = content.decode("utf-8")
-        except UnicodeDecodeError:
-            errors.append(f"{filename}: unable to decode file (use UTF-8)")
-            return table_name, [], [], warnings, errors
+            text = content.decode(encoding)
+            if encoding in ("cp949", "euc-kr"):
+                warnings.append(f"{filename}: decoded as {encoding} (recommend UTF-8)")
+            break
+        except (UnicodeDecodeError, LookupError):
+            continue
+    if text is None:
+        errors.append(f"{filename}: unable to decode file (tried UTF-8, CP949, EUC-KR)")
+        return table_name, [], [], warnings, errors
 
     # Parse CSV
     reader = csv.DictReader(io.StringIO(text))

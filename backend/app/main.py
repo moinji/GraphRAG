@@ -8,6 +8,12 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.auth import APIKeyMiddleware
+from app.logging_config import setup_logging
+
+# Initialize structured logging before anything else
+setup_logging(env=os.getenv("APP_ENV", "development"))
+
 from app.exceptions import (
     BuildJobNotFoundError,
     CSVValidationError,
@@ -30,7 +36,7 @@ from app.exceptions import (
     version_conflict_handler,
     version_not_found_handler,
 )
-from app.routers import csv_upload, ddl, evaluation, graph, health, kg_build, ontology, ontology_versions, query
+from app.routers import csv_upload, ddl, evaluation, graph, health, kg_build, ontology, ontology_versions, query, wisdom
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +44,12 @@ logger = logging.getLogger(__name__)
 def create_app() -> FastAPI:
     application = FastAPI(
         title="GraphRAG API",
-        version="0.8.0",
+        version="1.0.0",
         description="ERD → Knowledge Graph → GraphRAG",
     )
+
+    # Auth middleware (must be added before CORS)
+    application.add_middleware(APIKeyMiddleware)
 
     # CORS
     cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
@@ -76,6 +85,7 @@ def create_app() -> FastAPI:
     application.include_router(evaluation.router)
     application.include_router(csv_upload.router)
     application.include_router(graph.router)
+    application.include_router(wisdom.router)
 
     # Startup: ensure PG table + run migrations
     @application.on_event("startup")
@@ -85,23 +95,44 @@ def create_app() -> FastAPI:
 
             ensure_table()
         except Exception:
-            logger.warning("PG table setup failed at startup", exc_info=True)
+            logger.error(
+                "PG table setup failed at startup — version persistence disabled",
+                exc_info=True,
+            )
 
         try:
             from app.db.migrations import run_migrations
 
             run_migrations()
         except Exception:
-            logger.warning("PG migrations failed at startup", exc_info=True)
+            logger.error(
+                "PG migrations failed at startup — some features may be unavailable",
+                exc_info=True,
+            )
 
     @application.on_event("shutdown")
-    def _shutdown_close_neo4j() -> None:
+    def _shutdown_close_connections() -> None:
+        # Wait for active KG builds before closing connections
+        try:
+            from app.kg_builder.service import wait_for_active_builds
+
+            wait_for_active_builds()
+        except Exception:
+            logger.warning("Failed to wait for active builds", exc_info=True)
+
         try:
             from app.db.neo4j_client import close_driver
 
             close_driver()
         except Exception:
             logger.warning("Neo4j driver close failed at shutdown", exc_info=True)
+
+        try:
+            from app.db.pg_client import close_pool
+
+            close_pool()
+        except Exception:
+            logger.warning("PG pool close failed at shutdown", exc_info=True)
 
     return application
 

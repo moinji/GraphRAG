@@ -1,9 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { sendQuery } from '@/api/client';
-import { DEMO_QUESTIONS } from '@/constants';
+import { sendQuery, sendWisdomQuery } from '@/api/client';
+import { DEMO_QUESTIONS, DEMO_QUESTIONS_EN, WISDOM_DEMO_QUESTIONS } from '@/constants';
+import DIKWTimeline from '@/components/wisdom/DIKWTimeline';
 import type { ChatMessage, QueryResponse } from '@/types/ontology';
+
+type Mode = 'a' | 'b' | 'w';
 
 interface QueryPageProps {
   onBack: () => void;
@@ -13,7 +16,7 @@ export default function QueryPage({ onBack }: QueryPageProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  const [mode, setMode] = useState<'a' | 'b'>('a');
+  const [mode, setMode] = useState<Mode>('a');
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -29,13 +32,23 @@ export default function QueryPage({ onBack }: QueryPageProps) {
     setSending(true);
 
     try {
-      const data = await sendQuery(question, mode);
-      const assistantMsg: ChatMessage = {
-        role: 'assistant',
-        content: data.answer,
-        data,
-      };
-      setMessages((prev) => [...prev, assistantMsg]);
+      if (mode === 'w') {
+        const wisdomData = await sendWisdomQuery(question);
+        const assistantMsg: ChatMessage = {
+          role: 'assistant',
+          content: wisdomData.summary || 'DIKW 분석이 완료되었습니다.',
+          wisdomData,
+        };
+        setMessages((prev) => [...prev, assistantMsg]);
+      } else {
+        const data = await sendQuery(question, mode);
+        const assistantMsg: ChatMessage = {
+          role: 'assistant',
+          content: data.answer,
+          data,
+        };
+        setMessages((prev) => [...prev, assistantMsg]);
+      }
     } catch (e) {
       const errorMsg: ChatMessage = {
         role: 'assistant',
@@ -47,13 +60,18 @@ export default function QueryPage({ onBack }: QueryPageProps) {
     }
   }
 
+  const demoQuestions = mode === 'w' ? WISDOM_DEMO_QUESTIONS : DEMO_QUESTIONS;
+  const demoQuestionsEn = mode === 'w' ? null : DEMO_QUESTIONS_EN;
+
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold">지식 그래프 Q&A</h2>
+        <h2 className="text-xl font-semibold">
+          {mode === 'w' ? 'DIKW 인사이트 분석' : '지식 그래프 Q&A'}
+        </h2>
         <div className="flex items-center gap-3">
-          {/* A/B Mode Toggle */}
+          {/* A/B/W Mode Toggle */}
           <div className="flex items-center gap-1 rounded-lg border p-1">
             <button
               onClick={() => setMode('a')}
@@ -75,6 +93,16 @@ export default function QueryPage({ onBack }: QueryPageProps) {
             >
               B 로컬
             </button>
+            <button
+              onClick={() => setMode('w')}
+              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                mode === 'w'
+                  ? 'bg-amber-600 text-white'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              W 위즈덤
+            </button>
           </div>
           <button
             onClick={onBack}
@@ -87,15 +115,37 @@ export default function QueryPage({ onBack }: QueryPageProps) {
 
       {/* Demo question buttons */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-4">
-        {DEMO_QUESTIONS.map((q, i) => (
+        {demoQuestions.map((q, i) => (
           <button
-            key={i}
+            key={`${mode}-${i}`}
             onClick={() => handleSend(q.text)}
             disabled={sending}
-            className="text-left text-sm rounded-lg border p-2 hover:bg-muted transition-colors disabled:opacity-50"
+            className={`text-left text-sm rounded-lg border p-2 hover:bg-muted transition-colors disabled:opacity-50 ${
+              mode === 'w' ? 'border-amber-200 hover:border-amber-400' : ''
+            }`}
           >
-            <span className="inline-block mr-1.5 px-1.5 py-0.5 rounded bg-primary text-primary-foreground text-xs font-semibold">
+            <span
+              className={`inline-block mr-1.5 px-1.5 py-0.5 rounded text-xs font-semibold ${
+                mode === 'w'
+                  ? 'bg-amber-500 text-white'
+                  : 'bg-primary text-primary-foreground'
+              }`}
+            >
               {q.label}
+            </span>
+            {q.text}
+          </button>
+        ))}
+        {demoQuestionsEn?.map((q, i) => (
+          <button
+            key={`${mode}-en-${i}`}
+            onClick={() => handleSend(q.text)}
+            disabled={sending}
+            className="text-left text-sm rounded-lg border border-emerald-200 p-2 hover:bg-muted hover:border-emerald-400 transition-colors disabled:opacity-50"
+          >
+            <span className="inline-block mr-1.5 px-1.5 py-0.5 rounded text-xs font-semibold bg-emerald-600 text-white">
+              {q.label}
+              <span className="ml-0.5 text-[10px] opacity-80">EN</span>
             </span>
             {q.text}
           </button>
@@ -106,7 +156,9 @@ export default function QueryPage({ onBack }: QueryPageProps) {
       <div className="flex-1 overflow-y-auto space-y-3 mb-4">
         {messages.length === 0 && (
           <p className="text-center text-muted-foreground mt-8">
-            위 데모 질문을 클릭하거나 아래에 직접 질문을 입력하세요.
+            {mode === 'w'
+              ? 'Wisdom 데모 질문을 클릭하여 DIKW 분석을 시작하세요.'
+              : '위 데모 질문을 클릭하거나 아래에 직접 질문을 입력하세요.'}
           </p>
         )}
         {messages.map((msg, i) => (
@@ -115,21 +167,34 @@ export default function QueryPage({ onBack }: QueryPageProps) {
             className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-[80%] rounded-lg p-3 text-sm ${
+              className={`rounded-lg p-3 text-sm ${
                 msg.role === 'user'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted'
+                  ? 'max-w-[80%] bg-primary text-primary-foreground'
+                  : msg.wisdomData
+                    ? 'max-w-[90%] bg-muted'
+                    : 'max-w-[80%] bg-muted'
               }`}
             >
-              <p className="whitespace-pre-wrap">{msg.content}</p>
-              {msg.data && <AssistantDetail data={msg.data} />}
+              {msg.wisdomData ? (
+                <DIKWTimeline
+                  data={msg.wisdomData}
+                  onRelatedQuery={(q) => handleSend(q)}
+                />
+              ) : (
+                <>
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                  {msg.data && <AssistantDetail data={msg.data} />}
+                </>
+              )}
             </div>
           </div>
         ))}
         {sending && (
           <div className="flex justify-start">
-            <div className="bg-muted rounded-lg p-3 text-sm text-muted-foreground animate-pulse">
-              답변 생성 중...
+            <div className={`rounded-lg p-3 text-sm text-muted-foreground animate-pulse ${
+              mode === 'w' ? 'bg-amber-50 border border-amber-200' : 'bg-muted'
+            }`}>
+              {mode === 'w' ? 'DIKW 분석 중... (다중 쿼리 수집 + LLM 분석)' : '답변 생성 중...'}
             </div>
           </div>
         )}
@@ -147,7 +212,11 @@ export default function QueryPage({ onBack }: QueryPageProps) {
               handleSend(input);
             }
           }}
-          placeholder="질문을 입력하세요..."
+          placeholder={
+            mode === 'w'
+              ? '패턴, 추천, What-If 등 인사이트 질문을 입력하세요...'
+              : '질문을 입력하세요...'
+          }
           aria-label="질문 입력"
           rows={2}
           className="flex-1 rounded-lg border p-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
@@ -210,7 +279,7 @@ function AssistantDetail({ data }: { data: QueryResponse }) {
         )}
       </div>
 
-      {/* Latency + tokens (B안) */}
+      {/* Latency + tokens (B) */}
       {(data.latency_ms != null || data.llm_tokens_used != null) && (
         <div className="flex gap-2 text-xs text-muted-foreground">
           {data.latency_ms != null && <span>{data.latency_ms}ms</span>}
@@ -237,7 +306,7 @@ function AssistantDetail({ data }: { data: QueryResponse }) {
         </div>
       )}
 
-      {/* Subgraph context collapsible (B안) */}
+      {/* Subgraph context collapsible (B) */}
       {data.subgraph_context && (
         <div>
           <button

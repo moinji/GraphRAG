@@ -140,6 +140,16 @@ def classify_by_llm(question: str) -> RouteResult | None:
         logger.warning("LLM router API call failed: %s", e)
         return None
 
+    # Track token usage
+    if response.usage:
+        from app.llm_tracker import tracker
+        tracker.record(
+            caller="router_llm",
+            model=settings.openai_router_model,
+            input_tokens=response.usage.prompt_tokens,
+            output_tokens=response.usage.completion_tokens,
+        )
+
     raw_text = response.choices[0].message.content.strip()
 
     # Strip markdown fences if present

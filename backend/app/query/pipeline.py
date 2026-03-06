@@ -6,6 +6,7 @@ Orchestrates the full question-answering flow.
 from __future__ import annotations
 
 import logging
+import re
 import time
 
 from app.db.neo4j_client import get_driver
@@ -17,8 +18,17 @@ from app.query.template_registry import get_template
 
 logger = logging.getLogger(__name__)
 
+_HANGUL_RE = re.compile(r"[\uac00-\ud7a3]")
 
-def run_query(question: str, mode: str = "a") -> QueryResponse:
+
+def _is_korean(text: str) -> bool:
+    """Return True if the text contains Korean characters."""
+    return bool(_HANGUL_RE.search(text))
+
+
+def run_query(
+    question: str, mode: str = "a", tenant_id: str | None = None,
+) -> QueryResponse:
     """Execute the full Q&A pipeline for a single question."""
     start_time = time.time()
 
@@ -26,14 +36,15 @@ def run_query(question: str, mode: str = "a") -> QueryResponse:
     if mode == "b":
         from app.query.local_search import run_local_query
 
-        return run_local_query(question)
+        return run_local_query(question, tenant_id=tenant_id)
 
-    # A안: check demo cache first
-    from app.query.demo_cache import get_cached_answer
+    # A안: check demo cache first (skip in multi-tenant mode)
+    if tenant_id is None:
+        from app.query.demo_cache import get_cached_answer
 
-    cached = get_cached_answer(question)
-    if cached is not None:
-        return cached
+        cached = get_cached_answer(question)
+        if cached is not None:
+            return cached
 
     # A안: template-based pipeline
     # 1. Route
@@ -42,9 +53,14 @@ def run_query(question: str, mode: str = "a") -> QueryResponse:
     # Unsupported → early return
     if route == "unsupported":
         latency_ms = int((time.time() - start_time) * 1000)
+        unsupported_msg = (
+            "이 질문 유형은 아직 지원하지 않습니다."
+            if _is_korean(question)
+            else "This question type is not yet supported."
+        )
         return QueryResponse(
             question=question,
-            answer="이 질문 유형은 아직 지원하지 않습니다.",
+            answer=unsupported_msg,
             cypher="",
             paths=[],
             template_id="",
@@ -191,64 +207,97 @@ def _generate_answer(
     slots: dict[str, str],
     params: dict[str, object],
 ) -> str:
-    """Generate a Korean-language answer from query results."""
+    """Generate an answer from query results, matching the question language."""
+    ko = _is_korean(question)
+
     if not records:
-        return "해당 조건에 맞는 결과가 없습니다."
+        return "해당 조건에 맞는 결과가 없습니다." if ko else "No results found for the given criteria."
 
     if template_id == "two_hop":
         items = [r.get("result", "") for r in records]
         name = params.get("val", "?")
-        return f"{name} 고객이 주문한 상품: {', '.join(str(i) for i in items)}"
+        if ko:
+            return f"{name} 고객이 주문한 상품: {', '.join(str(i) for i in items)}"
+        return f"Products ordered by {name}: {', '.join(str(i) for i in items)}"
 
     if template_id == "custom_q2":
         name = params.get("name", "?")
         lines = []
         for i, r in enumerate(records, 1):
-            lines.append(f"{i}위 {r['product']}({r['category']}, 평점 {r['avg_rating']})")
-        return f"{name}가 주문한 상품 카테고리 내 리뷰 평점 Top {len(records)}: {', '.join(lines)}"
+            if ko:
+                lines.append(f"{i}위 {r['product']}({r['category']}, 평점 {r['avg_rating']})")
+            else:
+                lines.append(f"#{i} {r['product']} ({r['category']}, rating {r['avg_rating']})")
+        if ko:
+            return f"{name}가 주문한 상품 카테고리 내 리뷰 평점 Top {len(records)}: {', '.join(lines)}"
+        return f"Top {len(records)} rated products in categories ordered by {name}: {', '.join(lines)}"
 
     if template_id == "agg_with_rel":
         lines = []
         for i, r in enumerate(records, 1):
-            lines.append(f"{i}위 {r['category']}({r['order_count']}건)")
-        return f"가장 많이 팔린 카테고리 Top {len(records)}: {', '.join(lines)}"
+            if ko:
+                lines.append(f"{i}위 {r['category']}({r['order_count']}건)")
+            else:
+                lines.append(f"#{i} {r['category']} ({r['order_count']} orders)")
+        if ko:
+            return f"가장 많이 팔린 카테고리 Top {len(records)}: {', '.join(lines)}"
+        return f"Top {len(records)} best-selling categories: {', '.join(lines)}"
 
     if template_id == "custom_q5":
         parts = []
         for r in records:
-            status_label = "쿠폰 사용" if r.get("coupon_status") == "used" else "쿠폰 미사용"
-            parts.append(f"{status_label}: {r.get('order_count', 0)}건, 평균 {r.get('avg_amount', 0)}원")
+            if ko:
+                status_label = "쿠폰 사용" if r.get("coupon_status") == "used" else "쿠폰 미사용"
+                parts.append(f"{status_label}: {r.get('order_count', 0)}건, 평균 {r.get('avg_amount', 0)}원")
+            else:
+                status_label = "Coupon used" if r.get("coupon_status") == "used" else "No coupon"
+                parts.append(f"{status_label}: {r.get('order_count', 0)} orders, avg {r.get('avg_amount', 0)}")
         return " | ".join(parts)
 
     if template_id == "top_n":
         lines = []
         for i, r in enumerate(records, 1):
-            lines.append(f"{i}위 {r.get('category', '?')}({r.get('cnt', 0)}건)")
+            if ko:
+                lines.append(f"{i}위 {r.get('category', '?')}({r.get('cnt', 0)}건)")
+            else:
+                lines.append(f"#{i} {r.get('category', '?')} ({r.get('cnt', 0)})")
         return f"Top {len(records)}: {', '.join(lines)}"
 
     if template_id == "custom_q4":
         products = [r.get("product", "") for r in records]
-        return f"공통 구매 상품: {', '.join(str(p) for p in products)}"
+        if ko:
+            return f"공통 구매 상품: {', '.join(str(p) for p in products)}"
+        return f"Common products: {', '.join(str(p) for p in products)}"
 
     if template_id in ("one_hop_out", "one_hop_in", "filtered", "status_filter"):
         items = [str(r.get("result", "")) for r in records]
-        return f"결과: {', '.join(items)}"
+        if ko:
+            return f"결과: {', '.join(items)}"
+        return f"Results: {', '.join(items)}"
 
     if template_id == "three_hop":
         items = [str(r.get("result", "")) for r in records]
-        return f"결과: {', '.join(items)}"
+        if ko:
+            return f"결과: {', '.join(items)}"
+        return f"Results: {', '.join(items)}"
 
     if template_id == "common_neighbor":
         items = [str(r.get("result", "")) for r in records]
-        return f"공통 항목: {', '.join(items)}"
+        if ko:
+            return f"공통 항목: {', '.join(items)}"
+        return f"Common items: {', '.join(items)}"
 
     if template_id == "shortest_path":
         for r in records:
             path_nodes = r.get("path_nodes", [])
-            return f"최단 경로: {' -> '.join(str(n) for n in path_nodes)}"
+            if ko:
+                return f"최단 경로: {' -> '.join(str(n) for n in path_nodes)}"
+            return f"Shortest path: {' -> '.join(str(n) for n in path_nodes)}"
 
     # Fallback: generic answer
-    return f"조회 결과 {len(records)}건이 있습니다."
+    if ko:
+        return f"조회 결과 {len(records)}건이 있습니다."
+    return f"Found {len(records)} result(s)."
 
 
 def _extract_related_node_ids(

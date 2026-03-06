@@ -65,3 +65,18 @@ def health_check() -> dict[str, Any]:
         "neo4j": neo4j,
         "postgres": postgres,
     }
+
+
+@router.get("/llm-usage")
+def llm_usage() -> dict[str, Any]:
+    """Return aggregated LLM token usage and estimated costs."""
+    from app.llm_tracker import tracker
+    return tracker.get_summary()
+
+
+@router.delete("/llm-usage")
+def reset_llm_usage() -> dict[str, str]:
+    """Reset LLM usage counters."""
+    from app.llm_tracker import tracker
+    tracker.reset()
+    return {"status": "reset"}

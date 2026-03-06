@@ -95,6 +95,126 @@ def test_fk_engine_join_table_properties(ecommerce_erd: ERDSchema):
 
 
 # ════════════════════════════════════════════════════════════════════
+#  Auto Join-Table Detection Tests (7b–7d)
+# ════════════════════════════════════════════════════════════════════
+
+
+def test_auto_join_table_detection():
+    """#7b: Tables with exactly 2 FKs and ≤2 props are auto-detected as join tables."""
+    from app.models.schemas import ColumnInfo, ForeignKey, TableInfo
+
+    erd = ERDSchema(
+        tables=[
+            TableInfo(name="students", columns=[
+                ColumnInfo(name="id", data_type="SERIAL", nullable=False, is_primary_key=True),
+                ColumnInfo(name="name", data_type="VARCHAR", nullable=False),
+            ], primary_key="id"),
+            TableInfo(name="courses", columns=[
+                ColumnInfo(name="id", data_type="SERIAL", nullable=False, is_primary_key=True),
+                ColumnInfo(name="title", data_type="VARCHAR", nullable=False),
+            ], primary_key="id"),
+            # Join table: student_courses with 1 prop column (grade)
+            TableInfo(name="student_courses", columns=[
+                ColumnInfo(name="student_id", data_type="INTEGER", nullable=False),
+                ColumnInfo(name="course_id", data_type="INTEGER", nullable=False),
+                ColumnInfo(name="grade", data_type="VARCHAR", nullable=True),
+            ], primary_key=None, primary_keys=["student_id", "course_id"]),
+        ],
+        foreign_keys=[
+            ForeignKey(source_table="student_courses", source_column="student_id",
+                       target_table="students", target_column="id"),
+            ForeignKey(source_table="student_courses", source_column="course_id",
+                       target_table="courses", target_column="id"),
+        ],
+    )
+    ontology = build_ontology(erd)
+    # 2 node types: Students, Courses (auto PascalCase, not StudentCourses)
+    assert len(ontology.node_types) == 2
+    node_names = {n.name for n in ontology.node_types}
+    assert "Students" in node_names
+    assert "Courses" in node_names
+    # 1 join-table relationship
+    join_rels = [r for r in ontology.relationship_types if r.derivation == "fk_join_table"]
+    assert len(join_rels) == 1
+    assert join_rels[0].data_table == "student_courses"
+    assert "grade" in {p.name for p in join_rels[0].properties}
+
+
+def test_auto_join_table_not_triggered_for_entity():
+    """#7c: Tables with 2 FKs but 3+ prop columns are NOT treated as join tables."""
+    from app.models.schemas import ColumnInfo, ForeignKey, TableInfo
+
+    erd = ERDSchema(
+        tables=[
+            TableInfo(name="departments", columns=[
+                ColumnInfo(name="id", data_type="SERIAL", nullable=False, is_primary_key=True),
+                ColumnInfo(name="name", data_type="VARCHAR", nullable=False),
+            ], primary_key="id"),
+            TableInfo(name="managers", columns=[
+                ColumnInfo(name="id", data_type="SERIAL", nullable=False, is_primary_key=True),
+                ColumnInfo(name="name", data_type="VARCHAR", nullable=False),
+            ], primary_key="id"),
+            # Entity table: projects has 2 FKs but many data columns
+            TableInfo(name="projects", columns=[
+                ColumnInfo(name="id", data_type="SERIAL", nullable=False, is_primary_key=True),
+                ColumnInfo(name="department_id", data_type="INTEGER", nullable=False),
+                ColumnInfo(name="manager_id", data_type="INTEGER", nullable=False),
+                ColumnInfo(name="title", data_type="VARCHAR", nullable=False),
+                ColumnInfo(name="budget", data_type="DECIMAL", nullable=True),
+                ColumnInfo(name="start_date", data_type="DATE", nullable=True),
+            ], primary_key="id"),
+        ],
+        foreign_keys=[
+            ForeignKey(source_table="projects", source_column="department_id",
+                       target_table="departments", target_column="id"),
+            ForeignKey(source_table="projects", source_column="manager_id",
+                       target_table="managers", target_column="id"),
+        ],
+    )
+    ontology = build_ontology(erd)
+    # 3 node types: Departments, Managers, Projects
+    assert len(ontology.node_types) == 3
+    node_names = {n.name for n in ontology.node_types}
+    assert "Projects" in node_names
+    # No join-table relationships (projects is entity, not bridge)
+    join_rels = [r for r in ontology.relationship_types if r.derivation == "fk_join_table"]
+    assert len(join_rels) == 0
+
+
+def test_unknown_domain_auto_mapping():
+    """#7d: Completely unknown domain auto-maps to PascalCase + auto relationships."""
+    from app.models.schemas import ColumnInfo, ForeignKey, TableInfo
+
+    erd = ERDSchema(
+        tables=[
+            TableInfo(name="authors", columns=[
+                ColumnInfo(name="id", data_type="SERIAL", nullable=False, is_primary_key=True),
+                ColumnInfo(name="pen_name", data_type="VARCHAR", nullable=False),
+            ], primary_key="id"),
+            TableInfo(name="books", columns=[
+                ColumnInfo(name="id", data_type="SERIAL", nullable=False, is_primary_key=True),
+                ColumnInfo(name="author_id", data_type="INTEGER", nullable=False),
+                ColumnInfo(name="title", data_type="VARCHAR", nullable=False),
+                ColumnInfo(name="isbn", data_type="VARCHAR", nullable=True),
+            ], primary_key="id"),
+        ],
+        foreign_keys=[
+            ForeignKey(source_table="books", source_column="author_id",
+                       target_table="authors", target_column="id"),
+        ],
+    )
+    ontology = build_ontology(erd)
+    assert len(ontology.node_types) == 2
+    node_names = {n.name for n in ontology.node_types}
+    assert "Authors" in node_names
+    assert "Books" in node_names
+    assert len(ontology.relationship_types) == 1
+    rel = ontology.relationship_types[0]
+    assert rel.name == "HAS_AUTHOR"
+    assert rel.derivation == "fk_direct"
+
+
+# ════════════════════════════════════════════════════════════════════
 #  Evaluation Tests (8–10)
 # ════════════════════════════════════════════════════════════════════
 

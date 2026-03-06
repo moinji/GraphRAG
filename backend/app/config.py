@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
     neo4j_password: str = "password123"
-    neo4j_connect_timeout: int = 90
+    neo4j_connect_timeout: int = 10
 
     # PostgreSQL
     postgres_host: str = "localhost"
@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     local_search_default_depth: int = 2
     local_search_max_nodes: int = 50
 
+    # Wisdom Engine
+    wisdom_model: str = "gpt-4o"
+    wisdom_max_tokens: int = 4096
+
     # CSV Import
     csv_max_file_size_mb: int = 50
     csv_max_files: int = 50
@@ -53,6 +57,8 @@ class Settings(BaseSettings):
     # App
     app_env: str = "development"
     ddl_max_size_mb: int = 10
+    app_api_key: str | None = None  # Set to enable API key auth (single-tenant)
+    tenant_keys: str | None = None  # JSON: {"api_key_1": "tenant_a", ...} (multi-tenant)
 
     model_config = {
         "env_file": (str(_PROJECT_ROOT / ".env.example"), str(_PROJECT_ROOT / ".env")),

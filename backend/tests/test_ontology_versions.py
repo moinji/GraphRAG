@@ -194,7 +194,7 @@ async def test_update_recalculates_eval(
 
     captured_eval = {}
 
-    def mock_update(_vid, _ontology_json, eval_json):
+    def mock_update(_vid, _ontology_json, eval_json, **kwargs):
         captured_eval["data"] = eval_json
         return True
 

@@ -1,11 +1,14 @@
 """FK rule-based ontology engine: ERDSchema → OntologySpec.
 
-Known tables use fixed rules (e-commerce PoC).
-Unknown tables are auto-mapped: table_name → PascalCase node label,
-FK columns → relationships with auto-generated names.
+Two-layer approach:
+1. Domain hints (optional): known table→label, FK→relationship overrides.
+2. Auto-mapping (universal): PascalCase labels, auto join-table detection,
+   auto-generated relationship names for any DDL.
 """
 
 from __future__ import annotations
+
+import logging
 
 from app.models.schemas import (
     ERDSchema,
@@ -15,9 +18,14 @@ from app.models.schemas import (
     OntologySpec,
     RelProperty,
     RelationshipType,
+    TableInfo,
 )
 
-# ── Constants ──────────────────────────────────────────────────────
+logger = logging.getLogger(__name__)
+
+# ── Domain hints (e-commerce PoC) ──────────────────────────────────
+# These override auto-mapping for known tables. New domains can supply
+# their own hints or rely entirely on auto-mapping.
 
 TABLE_TO_LABEL: dict[str, str] = {
     "addresses": "Address",
@@ -57,8 +65,6 @@ JOIN_TABLE_CONFIG: dict[str, dict] = {
 # Key: (fk_source_table, fk_source_column)
 # Value: (source_node_label, rel_name, target_node_label,
 #         source_key_col_in_data, target_key_col_in_data)
-# source_key_col / target_key_col tell the loader *which column in the
-# FK-owning table* identifies the source and target nodes respectively.
 DIRECTION_MAP: dict[tuple[str, str], tuple[str, str, str, str, str]] = {
     # FK-owning table IS the source node  (normal FK direction)
     ("customers", "address_id"):  ("Customer", "LIVES_AT",    "Address",  "id", "address_id"),
@@ -131,26 +137,90 @@ def _fk_columns_for_table(
     }
 
 
-def build_ontology(erd: ERDSchema) -> OntologySpec:
-    """Convert ERDSchema → OntologySpec using fixed FK rules.
+def _detect_join_tables(
+    erd: ERDSchema,
+) -> dict[str, dict]:
+    """Auto-detect join/bridge tables not covered by JOIN_TABLE_CONFIG.
 
-    Known e-commerce tables use hardcoded mappings.
+    A table is treated as a join table when:
+    - It has exactly 2 FK columns
+    - Every non-PK, non-FK column is a candidate relationship property
+      (i.e., the table exists primarily to link two entities)
+    - It is not already in JOIN_TABLE_CONFIG
+
+    Returns a dict matching JOIN_TABLE_CONFIG format.
+    """
+    detected: dict[str, dict] = {}
+    for table in erd.tables:
+        if table.name in JOIN_TABLE_CONFIG:
+            continue
+
+        fk_cols = _fk_columns_for_table(table.name, erd.foreign_keys)
+        if len(fk_cols) != 2:
+            continue
+
+        # Get the two FKs
+        table_fks = [fk for fk in erd.foreign_keys if fk.source_table == table.name]
+        if len(table_fks) != 2:
+            continue
+
+        # Non-FK, non-PK columns become relationship properties
+        pk_cols = set(table.primary_keys) if table.primary_keys else (
+            {table.primary_key} if table.primary_key else set()
+        )
+        prop_cols = [
+            c.name for c in table.columns
+            if c.name not in fk_cols and c.name not in pk_cols
+        ]
+
+        # Heuristic: if there are 3+ non-FK/non-PK columns, it's likely
+        # a real entity table, not a bridge/join table
+        if len(prop_cols) > 2:
+            continue
+
+        fk0, fk1 = table_fks[0], table_fks[1]
+        # Generate relationship name from table name
+        rel_name = table.name.upper().removesuffix("S")
+
+        detected[table.name] = {
+            "rel_name": rel_name,
+            "source_fk_col": fk0.source_column,
+            "target_fk_col": fk1.source_column,
+            "property_columns": prop_cols,
+        }
+        logger.info(
+            "Auto-detected join table: %s → %s(%s, %s)",
+            table.name, rel_name, fk0.source_column, fk1.source_column,
+        )
+
+    return detected
+
+
+def build_ontology(erd: ERDSchema) -> OntologySpec:
+    """Convert ERDSchema → OntologySpec using FK rules + auto-detection.
+
+    Known tables use domain hints (hardcoded mappings).
     Unknown tables are auto-mapped: table_name → PascalCase node label,
     FK columns → auto-named relationships.
+    Join tables are auto-detected when not in JOIN_TABLE_CONFIG.
     """
     table_map = {t.name: t for t in erd.tables}
     node_types: list[NodeType] = []
     relationship_types: list[RelationshipType] = []
 
+    # Merge hardcoded + auto-detected join tables
+    all_join_config = dict(JOIN_TABLE_CONFIG)
+    all_join_config.update(_detect_join_tables(erd))
+
     # Build a unified label map: known tables + auto-mapped unknown tables
     label_map: dict[str, str] = dict(TABLE_TO_LABEL)
     for table in erd.tables:
-        if table.name not in label_map and table.name not in JOIN_TABLE_CONFIG:
+        if table.name not in label_map and table.name not in all_join_config:
             label_map[table.name] = _to_pascal_case(table.name)
 
     # ── 1. Node types ─────────────────────────────────────────────
     for table in erd.tables:
-        if table.name in JOIN_TABLE_CONFIG:
+        if table.name in all_join_config:
             continue
         label = label_map.get(table.name)
         if label is None:
@@ -193,7 +263,7 @@ def build_ontology(erd: ERDSchema) -> OntologySpec:
             continue
 
         # Skip join table FKs (handled below)
-        if fk.source_table in JOIN_TABLE_CONFIG:
+        if fk.source_table in all_join_config:
             continue
 
         # Auto-map: FK-owning table → target table
@@ -227,7 +297,7 @@ def build_ontology(erd: ERDSchema) -> OntologySpec:
             ))
 
     # ── 3. Join-table relationships ───────────────────────────────
-    for jt_name, cfg in JOIN_TABLE_CONFIG.items():
+    for jt_name, cfg in all_join_config.items():
         jt = table_map.get(jt_name)
         if jt is None:
             continue

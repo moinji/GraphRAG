@@ -263,8 +263,8 @@ const RadialCanvas = forwardRef<RadialCanvasHandle, RadialCanvasProps>(
           const sid = typeof e.source === 'object' ? (e.source as SimNode).id : e.source;
           const tid = typeof e.target === 'object' ? (e.target as SimNode).id : e.target;
           if (sid === d.id || tid === d.id) {
-            connNodeIds.add(sid);
-            connNodeIds.add(tid);
+            connNodeIds.add(String(sid));
+            connNodeIds.add(String(tid));
             connEdgeIds.add(e.id);
           }
         }

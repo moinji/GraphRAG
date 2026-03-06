@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.db.neo4j_client import get_driver
 from app.models.schemas import GraphData, GraphEdge, GraphNode, GraphResetResponse, GraphStats
+from app.tenant import get_tenant_id, tenant_label_prefix
 
 logger = logging.getLogger(__name__)
 
@@ -61,20 +62,37 @@ def _pick_display_name(props: dict, label: str, fallback_id: object) -> str:
 
     return f"{label} #{node_id}"
 
+def _tenant_node_filter(prefix: str) -> str:
+    """Return a Cypher WHERE clause to filter nodes by tenant label prefix."""
+    if not prefix:
+        return ""
+    return f"WHERE any(lbl IN labels(n) WHERE lbl STARTS WITH '{prefix}') "
+
+
+def _strip_prefix(label: str, prefix: str) -> str:
+    """Strip tenant prefix from a label for display."""
+    if prefix and label.startswith(prefix):
+        return label[len(prefix):]
+    return label
+
+
 router = APIRouter(prefix="/api/v1/graph", tags=["graph"])
 
 
 # ── GET /stats ───────────────────────────────────────────────────
 
 @router.get("/stats", response_model=GraphStats)
-def graph_stats() -> GraphStats:
+def graph_stats(request: Request) -> GraphStats:
     """Return node/edge type counts."""
+    tenant_id = get_tenant_id(request)
+    prefix = tenant_label_prefix(tenant_id)
+    nfilter = _tenant_node_filter(prefix)
     driver = get_driver()
     try:
         with driver.session() as session:
             # Node counts by label
             node_rows = session.run(
-                "MATCH (n) "
+                f"MATCH (n) {nfilter}"
                 "UNWIND labels(n) AS lbl "
                 "RETURN lbl, count(*) AS cnt "
                 "ORDER BY cnt DESC"
@@ -82,15 +100,25 @@ def graph_stats() -> GraphStats:
             node_counts: dict[str, int] = {}
             total_nodes = 0
             for rec in node_rows:
-                node_counts[rec["lbl"]] = rec["cnt"]
+                display_lbl = _strip_prefix(rec["lbl"], prefix)
+                node_counts[display_lbl] = rec["cnt"]
                 total_nodes += rec["cnt"]
 
-            # Edge counts by type
-            edge_rows = session.run(
-                "MATCH ()-[r]->() "
-                "RETURN type(r) AS t, count(*) AS cnt "
-                "ORDER BY cnt DESC"
-            )
+            # Edge counts by type (only edges between tenant nodes)
+            if prefix:
+                edge_rows = session.run(
+                    f"MATCH (a)-[r]->(b) "
+                    f"WHERE any(l IN labels(a) WHERE l STARTS WITH '{prefix}') "
+                    f"AND any(l IN labels(b) WHERE l STARTS WITH '{prefix}') "
+                    "RETURN type(r) AS t, count(*) AS cnt "
+                    "ORDER BY cnt DESC"
+                )
+            else:
+                edge_rows = session.run(
+                    "MATCH ()-[r]->() "
+                    "RETURN type(r) AS t, count(*) AS cnt "
+                    "ORDER BY cnt DESC"
+                )
             edge_counts: dict[str, int] = {}
             total_edges = 0
             for rec in edge_rows:
@@ -111,22 +139,43 @@ def graph_stats() -> GraphStats:
 # ── DELETE /reset ────────────────────────────────────────────────
 
 @router.delete("/reset", response_model=GraphResetResponse)
-def graph_reset() -> GraphResetResponse:
+def graph_reset(request: Request) -> GraphResetResponse:
     """Delete all nodes and edges from Neo4j."""
+    tenant_id = get_tenant_id(request)
+    prefix = tenant_label_prefix(tenant_id)
+    nfilter = _tenant_node_filter(prefix)
     driver = get_driver()
     try:
         with driver.session() as session:
-            counts = session.run(
-                "MATCH (n) "
-                "WITH count(n) AS node_cnt "
-                "OPTIONAL MATCH ()-[r]->() "
-                "WITH node_cnt, count(r) AS edge_cnt "
-                "RETURN node_cnt, edge_cnt"
-            ).single()
-            deleted_nodes = counts["node_cnt"]
-            deleted_edges = counts["edge_cnt"]
-
-            session.run("MATCH (n) DETACH DELETE n")
+            if prefix:
+                counts = session.run(
+                    f"MATCH (n) {nfilter}"
+                    "WITH count(n) AS node_cnt "
+                    "RETURN node_cnt"
+                ).single()
+                deleted_nodes = counts["node_cnt"]
+                # Count edges between tenant nodes
+                edge_cnt = session.run(
+                    f"MATCH (a)-[r]->(b) "
+                    f"WHERE any(l IN labels(a) WHERE l STARTS WITH '{prefix}') "
+                    f"AND any(l IN labels(b) WHERE l STARTS WITH '{prefix}') "
+                    "RETURN count(r) AS c"
+                ).single()["c"]
+                deleted_edges = edge_cnt
+                session.run(
+                    f"MATCH (n) {nfilter}DETACH DELETE n"
+                )
+            else:
+                counts = session.run(
+                    "MATCH (n) "
+                    "WITH count(n) AS node_cnt "
+                    "OPTIONAL MATCH ()-[r]->() "
+                    "WITH node_cnt, count(r) AS edge_cnt "
+                    "RETURN node_cnt, edge_cnt"
+                ).single()
+                deleted_nodes = counts["node_cnt"]
+                deleted_edges = counts["edge_cnt"]
+                session.run("MATCH (n) DETACH DELETE n")
 
         logger.info("Graph reset: %d nodes, %d edges deleted", deleted_nodes, deleted_edges)
         return GraphResetResponse(
@@ -141,22 +190,34 @@ def graph_reset() -> GraphResetResponse:
 # ── GET /full ────────────────────────────────────────────────────
 
 @router.get("/full", response_model=GraphData)
-def graph_full(limit: int = Query(500, ge=1, le=5000)) -> GraphData:
+def graph_full(request: Request, limit: int = Query(500, ge=1, le=5000)) -> GraphData:
     """Return the full graph (up to *limit* nodes) with all connecting edges."""
+    tenant_id = get_tenant_id(request)
+    prefix = tenant_label_prefix(tenant_id)
+    nfilter = _tenant_node_filter(prefix)
     driver = get_driver()
     try:
         with driver.session() as session:
-            # Total counts
+            # Total counts (tenant-scoped)
             total_nodes = session.run(
-                "MATCH (n) RETURN count(n) AS c"
+                f"MATCH (n) {nfilter}RETURN count(n) AS c"
             ).single()["c"]
-            total_edges = session.run(
-                "MATCH ()-[r]->() RETURN count(r) AS c"
-            ).single()["c"]
+            if prefix:
+                total_edges = session.run(
+                    f"MATCH (a)-[r]->(b) "
+                    f"WHERE any(l IN labels(a) WHERE l STARTS WITH '{prefix}') "
+                    f"AND any(l IN labels(b) WHERE l STARTS WITH '{prefix}') "
+                    "RETURN count(r) AS c"
+                ).single()["c"]
+            else:
+                total_edges = session.run(
+                    "MATCH ()-[r]->() RETURN count(r) AS c"
+                ).single()["c"]
 
-            # Fetch nodes (limited)
+            # Fetch nodes (limited, tenant-scoped)
             node_records = session.run(
-                "MATCH (n) RETURN n, labels(n) AS lbls, elementId(n) AS eid "
+                f"MATCH (n) {nfilter}"
+                "RETURN n, labels(n) AS lbls, elementId(n) AS eid "
                 "LIMIT $limit",
                 limit=limit,
             )
@@ -167,7 +228,8 @@ def graph_full(limit: int = Query(500, ge=1, le=5000)) -> GraphData:
             for rec in node_records:
                 n = rec["n"]
                 lbls = rec["lbls"]
-                label = lbls[0] if lbls else "Unknown"
+                raw_label = lbls[0] if lbls else "Unknown"
+                label = _strip_prefix(raw_label, prefix)
                 props = dict(n)
                 node_id_val = props.get("id", rec["eid"])
                 composite_id = f"{label}_{node_id_val}"
@@ -217,15 +279,22 @@ def graph_full(limit: int = Query(500, ge=1, le=5000)) -> GraphData:
 # ── GET /neighbors/{node_id} ─────────────────────────────────────
 
 @router.get("/neighbors/{node_id}", response_model=GraphData)
-def graph_neighbors(node_id: str, depth: int = Query(1, ge=1, le=3)) -> GraphData:
+def graph_neighbors(
+    node_id: str, request: Request, depth: int = Query(1, ge=1, le=3),
+) -> GraphData:
     """Return neighbors of a node up to *depth* hops.
 
     *node_id* uses the composite format ``{Label}_{id}`` (e.g. ``Customer_1``).
     """
+    tenant_id = get_tenant_id(request)
+    prefix = tenant_label_prefix(tenant_id)
+
     parts = node_id.split("_", 1)
     if len(parts) != 2:
         raise HTTPException(status_code=400, detail="node_id must be {Label}_{id}")
     label, id_val = parts
+    # Apply tenant prefix for Neo4j query
+    neo4j_label = f"{prefix}{label}" if prefix else label
 
     # Try to parse id_val as int if possible
     try:
@@ -238,7 +307,7 @@ def graph_neighbors(node_id: str, depth: int = Query(1, ge=1, le=3)) -> GraphDat
         with driver.session() as session:
             # Verify anchor node exists
             anchor = session.run(
-                f"MATCH (n:{label} {{id: $id_val}}) RETURN n, elementId(n) AS eid",
+                f"MATCH (n:`{neo4j_label}` {{id: $id_val}}) RETURN n, elementId(n) AS eid",
                 id_val=id_val_parsed,
             ).single()
             if not anchor:
@@ -246,7 +315,7 @@ def graph_neighbors(node_id: str, depth: int = Query(1, ge=1, le=3)) -> GraphDat
 
             # Fetch neighborhood
             records = session.run(
-                f"MATCH path = (start:{label} {{id: $id_val}})-[*1..{depth}]-(end) "
+                f"MATCH path = (start:`{neo4j_label}` {{id: $id_val}})-[*1..{depth}]-(end) "
                 "UNWIND nodes(path) AS n "
                 "WITH DISTINCT n "
                 "RETURN n, labels(n) AS lbls, elementId(n) AS eid",
@@ -260,7 +329,8 @@ def graph_neighbors(node_id: str, depth: int = Query(1, ge=1, le=3)) -> GraphDat
             for rec in records:
                 n = rec["n"]
                 lbls = rec["lbls"]
-                nlabel = lbls[0] if lbls else "Unknown"
+                raw_nlabel = lbls[0] if lbls else "Unknown"
+                nlabel = _strip_prefix(raw_nlabel, prefix)
                 props = dict(n)
                 nid = props.get("id", rec["eid"])
                 composite = f"{nlabel}_{nid}"

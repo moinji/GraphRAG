@@ -23,41 +23,108 @@ from app.query.local_prompts import (
 
 logger = logging.getLogger(__name__)
 
-# ── Known entities from seed data (rule-based extraction) ────────
-
-_CUSTOMERS = {"김민수", "이영희", "박지훈", "최수진", "정대현"}
-_PRODUCTS = {
-    "맥북프로", "에어팟프로", "갤럭시탭", "LG그램", "갤럭시버즈",
-    "아이패드에어", "맥북에어", "소니WH-1000XM5",
+# ── Fallback entities from seed data ────────────────────────────
+_FALLBACK_ENTITIES: dict[str, set[str]] = {
+    "Customer": {"김민수", "이영희", "박지훈", "최수진", "정대현"},
+    "Product": {
+        "맥북프로", "에어팟프로", "갤럭시탭", "LG그램", "갤럭시버즈",
+        "아이패드에어", "맥북에어", "소니WH-1000XM5",
+    },
+    "Category": {"전자기기", "의류", "식품", "노트북", "오디오", "태블릿"},
+    "Supplier": {"애플코리아", "삼성전자", "LG전자"},
 }
-_CATEGORIES = {"전자기기", "의류", "식품", "노트북", "오디오", "태블릿"}
-_SUPPLIERS = {"애플코리아", "삼성전자", "LG전자"}
+
+# Dynamic entity cache (populated from Neo4j), keyed by tenant_id
+_entity_cache: dict[str | None, dict[str, set[str]]] = {}
+_entity_cache_ts: dict[str | None, float] = {}
+_ENTITY_CACHE_TTL = 300  # 5 minutes
+
+
+def _load_entities_from_neo4j(tenant_id: str | None = None) -> dict[str, set[str]]:
+    """Query Neo4j for all node labels and their name properties."""
+    from app.tenant import tenant_label_prefix
+
+    now = time.time()
+    cached = _entity_cache.get(tenant_id)
+    cached_ts = _entity_cache_ts.get(tenant_id, 0.0)
+    if cached is not None and (now - cached_ts) < _ENTITY_CACHE_TTL:
+        return cached
+
+    prefix = tenant_label_prefix(tenant_id)
+
+    try:
+        driver = get_driver()
+        entities: dict[str, set[str]] = {}
+        with driver.session() as session:
+            if prefix:
+                # Only load entities with tenant-prefixed labels
+                result = session.run(
+                    "MATCH (n) WHERE n.name IS NOT NULL "
+                    "WITH n, [l IN labels(n) WHERE l STARTS WITH $prefix][0] AS lbl "
+                    "WHERE lbl IS NOT NULL "
+                    "RETURN lbl AS label, collect(DISTINCT n.name) AS names",
+                    prefix=prefix,
+                )
+            else:
+                result = session.run(
+                    "MATCH (n) WHERE n.name IS NOT NULL "
+                    "RETURN labels(n)[0] AS label, collect(DISTINCT n.name) AS names"
+                )
+            for record in result:
+                label = record["label"]
+                # Strip tenant prefix for entity matching
+                if prefix and label.startswith(prefix):
+                    label = label[len(prefix):]
+                names = set(record["names"])
+                if names:
+                    entities[label] = names
+        if not entities:
+            # Neo4j is empty (no data loaded yet), use fallback
+            return _FALLBACK_ENTITIES
+        _entity_cache[tenant_id] = entities
+        _entity_cache_ts[tenant_id] = now
+        logger.debug("Loaded %d entity types from Neo4j (tenant=%s)", len(entities), tenant_id)
+        return entities
+    except Exception:
+        logger.warning("Failed to load entities from Neo4j, using fallback", exc_info=True)
+        return _FALLBACK_ENTITIES
+
+
+def invalidate_entity_cache(tenant_id: str | None = None) -> None:
+    """Clear the entity cache (call after KG rebuild)."""
+    if tenant_id is not None:
+        _entity_cache.pop(tenant_id, None)
+        _entity_cache_ts.pop(tenant_id, None)
+    else:
+        _entity_cache.clear()
+        _entity_cache_ts.clear()
+
 
 # Aggregate question patterns (no specific entity anchor)
 _AGGREGATE_PATTERNS = [
     re.compile(r"(가장|많이|top|순위|평균|총|합계|통계|전체)", re.IGNORECASE),
     re.compile(r"(카테고리별|고객별|상품별|월별|주문별)", re.IGNORECASE),
     re.compile(r"(몇\s*개|몇\s*명|몇\s*건)", re.IGNORECASE),
+    # English aggregate patterns
+    re.compile(r"(most|total|average|ranking|statistics|overall|how\s*many)", re.IGNORECASE),
+    re.compile(r"(by\s+category|by\s+customer|by\s+product|per\s+month)", re.IGNORECASE),
 ]
 
 
-def extract_entity(question: str) -> tuple[str | None, str | None]:
-    """Extract the main entity from a question using rules.
+def extract_entity(
+    question: str, tenant_id: str | None = None,
+) -> tuple[str | None, str | None]:
+    """Extract the main entity from a question.
 
+    Dynamically loads entity names from Neo4j (with TTL cache).
+    Falls back to hardcoded seed data if Neo4j is unavailable.
     Returns (entity_name, neo4j_label) or (None, None).
     """
-    for name in _CUSTOMERS:
-        if name in question:
-            return name, "Customer"
-    for name in _PRODUCTS:
-        if name in question:
-            return name, "Product"
-    for name in _CATEGORIES:
-        if name in question:
-            return name, "Category"
-    for name in _SUPPLIERS:
-        if name in question:
-            return name, "Supplier"
+    entities = _load_entities_from_neo4j(tenant_id)
+    for label, names in entities.items():
+        for name in sorted(names, key=len, reverse=True):  # longest match first
+            if name in question:
+                return name, label
     return None, None
 
 
@@ -75,8 +142,10 @@ def determine_depth(question: str) -> int:
     return settings.local_search_default_depth
 
 
-def build_subgraph_cypher(label: str, depth: int) -> str:
+def build_subgraph_cypher(label: str, depth: int, tenant_id: str | None = None) -> str:
     """Generate subgraph extraction Cypher for given label and depth."""
+    from app.tenant import prefixed_label
+    label = prefixed_label(tenant_id, label)
     if depth == 1:
         return (
             f"MATCH (anchor:{label} {{name: $entity_name}}) "
@@ -165,11 +234,21 @@ _AGGREGATE_QUESTION_MAP: list[tuple[re.Pattern, str]] = [
 ]
 
 
-def _select_aggregate_cypher(question: str) -> str | None:
+def _select_aggregate_cypher(
+    question: str, tenant_id: str | None = None,
+) -> str | None:
     """Select the best aggregate Cypher for a question."""
     for pattern, key in _AGGREGATE_QUESTION_MAP:
         if pattern.search(question):
-            return _AGGREGATE_CYPHER_MAP.get(key)
+            cypher = _AGGREGATE_CYPHER_MAP.get(key)
+            if cypher and tenant_id is not None:
+                from app.tenant import prefix_cypher_labels
+                known = list(_FALLBACK_ENTITIES.keys()) + [
+                    "Order", "Product", "Category", "Customer", "Review",
+                    "Shipping", "Address", "Payment", "Coupon", "Supplier",
+                ]
+                cypher = prefix_cypher_labels(cypher, tenant_id, known)
+            return cypher
     return None
 
 
@@ -211,6 +290,15 @@ def generate_answer_with_llm(
             response.usage.prompt_tokens + response.usage.completion_tokens
         )
 
+        # Track token usage
+        from app.llm_tracker import tracker
+        tracker.record(
+            caller="local_search",
+            model=settings.local_search_model,
+            input_tokens=response.usage.prompt_tokens,
+            output_tokens=response.usage.completion_tokens,
+        )
+
         answer, paths = parse_local_answer(raw_text)
         return answer, paths, tokens_used
 
@@ -218,18 +306,24 @@ def generate_answer_with_llm(
         raise LocalSearchError(f"LLM answer generation failed: {e}")
 
 
-def run_local_query(question: str) -> QueryResponse:
+def run_local_query(
+    question: str, tenant_id: str | None = None,
+) -> QueryResponse:
     """B안 full pipeline: entity extract → subgraph/aggregate → LLM answer."""
     start_time = time.time()
 
-    entity_name, entity_label = extract_entity(question)
+    entity_name, entity_label = extract_entity(question, tenant_id)
 
     # Case 1: Aggregate question (no entity anchor)
     if entity_name is None and _is_aggregate_question(question):
-        agg_cypher = _select_aggregate_cypher(question)
+        agg_cypher = _select_aggregate_cypher(question, tenant_id)
         if agg_cypher is None:
             # Generic fallback
             agg_cypher = _AGGREGATE_CYPHER_MAP["category_order_count"]
+            if tenant_id is not None:
+                from app.tenant import prefix_cypher_labels
+                known = ["Order", "Product", "Category", "Customer"]
+                agg_cypher = prefix_cypher_labels(agg_cypher, tenant_id, known)
 
         records = _execute_neo4j(agg_cypher)
         subgraph_text = serialize_aggregate_results(records)
@@ -253,9 +347,10 @@ def run_local_query(question: str) -> QueryResponse:
     # Case 2: No entity and not aggregate → unsupported
     if entity_name is None:
         latency_ms = int((time.time() - start_time) * 1000)
+        _ko = bool(re.search(r"[\uac00-\ud7a3]", question))
         return QueryResponse(
             question=question,
-            answer="이 질문 유형은 아직 지원하지 않습니다.",
+            answer="이 질문 유형은 아직 지원하지 않습니다." if _ko else "This question type is not yet supported.",
             cypher="",
             paths=[],
             template_id="",
@@ -268,7 +363,7 @@ def run_local_query(question: str) -> QueryResponse:
 
     # Case 3: Entity-anchored subgraph search
     depth = determine_depth(question)
-    cypher = build_subgraph_cypher(entity_label, depth)
+    cypher = build_subgraph_cypher(entity_label, depth, tenant_id)
 
     records = _execute_neo4j(cypher, {"entity_name": entity_name})
 
@@ -276,7 +371,11 @@ def run_local_query(question: str) -> QueryResponse:
         latency_ms = int((time.time() - start_time) * 1000)
         return QueryResponse(
             question=question,
-            answer=f"'{entity_name}' 엔티티를 그래프에서 찾을 수 없습니다.",
+            answer=(
+                f"'{entity_name}' 엔티티를 그래프에서 찾을 수 없습니다."
+                if re.search(r"[\uac00-\ud7a3]", question)
+                else f"Entity '{entity_name}' not found in the graph."
+            ),
             cypher=cypher,
             paths=[],
             template_id="local_subgraph",

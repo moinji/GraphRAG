@@ -68,6 +68,18 @@ def _create_constraint(tx, label: str, key_prop: str):
     )
 
 
+def _create_index(tx, label: str, prop: str):
+    """Create a property index for faster lookups (idempotent)."""
+    tx.run(
+        f"CREATE INDEX IF NOT EXISTS "
+        f"FOR (n:{label}) ON (n.`{prop}`)"
+    )
+
+
+# Maximum rows per UNWIND batch to prevent Neo4j transaction OOM
+_BATCH_SIZE = 5000
+
+
 def _load_nodes(tx, label: str, key_prop: str, props: list[str], rows: list[dict]):
     """UNWIND + MERGE batch for one node type."""
     set_parts = ", ".join(f"n.`{p}` = row.`{p}`" for p in props if p != key_prop)
@@ -138,6 +150,14 @@ def _try_openai(prompt: str) -> str | None:
             temperature=0,
             messages=[{"role": "user", "content": prompt}],
         )
+        if resp.usage:
+            from app.llm_tracker import tracker
+            tracker.record(
+                caller="name_template",
+                model=settings.openai_router_model,
+                input_tokens=resp.usage.prompt_tokens,
+                output_tokens=resp.usage.completion_tokens,
+            )
         return resp.choices[0].message.content.strip().strip("\"'`")
     except Exception as exc:
         logger.warning("OpenAI name template failed: %s", exc)
@@ -156,6 +176,14 @@ def _try_anthropic(prompt: str) -> str | None:
             temperature=0,
             messages=[{"role": "user", "content": prompt}],
         )
+        if resp.usage:
+            from app.llm_tracker import tracker
+            tracker.record(
+                caller="name_template",
+                model=settings.anthropic_model,
+                input_tokens=resp.usage.input_tokens,
+                output_tokens=resp.usage.output_tokens,
+            )
         return resp.content[0].text.strip().strip("\"'`")
     except Exception as exc:
         logger.warning("Anthropic name template failed: %s", exc)
@@ -187,20 +215,63 @@ def _ask_llm_name_template(label: str, prop_names: list[str], sample_row: dict) 
         return None
 
 
+# ── Hardcoded display name templates (zero LLM calls) ─────────
+
+_KNOWN_NAME_TEMPLATES: dict[str, str] = {
+    "Order": "주문 #{id} ({status})",
+    "Payment": "결제 #{id} ({method})",
+    "Review": "리뷰 #{id} ({rating}점)",
+    "Address": "{city} {district}",
+    "Shipping": "배송 #{id} ({status})",
+    "Coupon": "{code} ({discount_pct}%)",
+}
+
+# In-memory cache: survives across builds within the same process
+_name_template_cache: dict[str, str] = {}
+
+
+def _infer_name_template(label: str, prop_names: list[str]) -> str | None:
+    """Rule-based display name inference — no LLM call, instant return."""
+    for preferred in ("name", "title", "code"):
+        if preferred in prop_names:
+            return f"{{{preferred}}}"
+    if "id" in prop_names:
+        for extra in ("status", "type", "method", "category"):
+            if extra in prop_names:
+                return label + " #{id} ({" + extra + "})"
+        return label + " #{id}"
+    return None
+
+
 def _ensure_name(label: str, rows: list[dict], prop_names: list[str]) -> list[dict]:
     """Add a human-readable ``name`` to rows that lack one.
 
-    Calls the LLM once to decide the best display format for the node type,
-    then applies the template to every row.  Falls back to ``{Label} #{id}``
-    if the LLM is unavailable or fails.
+    Waterfall: hardcoded → cache → rule inference → LLM (last resort) → fallback.
     """
     if not rows:
         return rows
     if "name" in rows[0] and rows[0]["name"] is not None:
         return rows
 
-    template = _ask_llm_name_template(label, prop_names, rows[0])
-    if not template:
+    # 1. Hardcoded templates (instant)
+    template = _KNOWN_NAME_TEMPLATES.get(label)
+
+    # 2. Cache from previous build
+    if template is None:
+        template = _name_template_cache.get(label)
+
+    # 3. Rule-based inference (instant)
+    if template is None:
+        template = _infer_name_template(label, prop_names)
+
+    # 4. LLM as last resort (only for truly unknown node types)
+    if template is None:
+        template = _ask_llm_name_template(label, prop_names, rows[0])
+        if template:
+            _name_template_cache[label] = template
+
+    # 5. Fallback
+    if template is None:
         template = label + " #{id}"
 
     enriched: list[dict] = []
@@ -221,41 +292,55 @@ def load_to_neo4j(
     uri: str,
     user: str,
     password: str,
+    tenant_id: str | None = None,
 ) -> dict[str, int]:
     """Full load pipeline. Returns counts dict."""
+    from app.tenant import prefixed_label, tenant_label_prefix
+
     _wait_for_neo4j(uri, user, password)
     driver = get_driver()
     stats: dict[str, int] = {"nodes": 0, "relationships": 0}
+    prefix = tenant_label_prefix(tenant_id)
 
     with driver.session() as session:
-        # ── 1. Clean ───────────────────────────────────────────────
-        session.execute_write(_clean_db)
+        # ── 1. Clean (tenant-scoped) ──────────────────────────────
+        if prefix:
+            # Delete only nodes with this tenant's prefixed labels
+            all_labels = [prefixed_label(tenant_id, nt.name) for nt in ontology.node_types]
+            for lbl in all_labels:
+                session.run(f"MATCH (n:`{lbl}`) DETACH DELETE n")
+        else:
+            session.execute_write(_clean_db)
 
-        # ── 2. Constraints ─────────────────────────────────────────
+        # ── 2. Constraints + Indexes ────────────────────────────────
         for nt in ontology.node_types:
             key_prop = _find_key_prop(nt)
-            session.execute_write(_create_constraint, nt.name, key_prop)
+            lbl = prefixed_label(tenant_id, nt.name)
+            session.execute_write(_create_constraint, lbl, key_prop)
+            if key_prop != "name":
+                session.execute_write(_create_index, lbl, "name")
 
         # ── 3. Nodes ──────────────────────────────────────────────
         for nt in ontology.node_types:
             key_prop = _find_key_prop(nt)
+            lbl = prefixed_label(tenant_id, nt.name)
             rows = data.get(nt.source_table, [])
             prop_names = [p.name for p in nt.properties]
             rows = _ensure_name(nt.name, rows, prop_names)
             if "name" not in prop_names:
                 prop_names.append("name")
-            session.execute_write(_load_nodes, nt.name, key_prop, prop_names, rows)
+            for i in range(0, len(rows), _BATCH_SIZE):
+                batch = rows[i : i + _BATCH_SIZE]
+                session.execute_write(_load_nodes, lbl, key_prop, prop_names, batch)
             stats["nodes"] += len(rows)
 
         # ── 4. Relationships ──────────────────────────────────────
-        # Build lookup: node_name → key property
         node_key_map = {nt.name: _find_key_prop(nt) for nt in ontology.node_types}
 
         for rel in ontology.relationship_types:
             table_rows = data.get(rel.data_table, [])
             src_key = node_key_map.get(rel.source_node, "id")
             tgt_key = node_key_map.get(rel.target_node, "id")
-            # Build loader rows with __src / __tgt keys
             loader_rows: list[dict] = []
             for row in table_rows:
                 src_val = row.get(rel.source_key_column)
@@ -267,15 +352,34 @@ def load_to_neo4j(
                     lr[p.source_column] = row.get(p.source_column)
                 loader_rows.append(lr)
 
-            if loader_rows:
-                session.execute_write(_load_relationships, rel, loader_rows, src_key, tgt_key)
+            # Create a tenant-prefixed copy of the relationship for Cypher generation
+            prefixed_rel = RelationshipType(
+                name=rel.name,
+                source_node=prefixed_label(tenant_id, rel.source_node),
+                target_node=prefixed_label(tenant_id, rel.target_node),
+                data_table=rel.data_table,
+                source_key_column=rel.source_key_column,
+                target_key_column=rel.target_key_column,
+                properties=rel.properties,
+                derivation=rel.derivation,
+            )
+            for i in range(0, len(loader_rows), _BATCH_SIZE):
+                batch = loader_rows[i : i + _BATCH_SIZE]
+                session.execute_write(_load_relationships, prefixed_rel, batch, src_key, tgt_key)
             stats["relationships"] += len(loader_rows)
 
-    # ── 5. Verify counts ──────────────────────────────────────────
+    # ── 5. Verify counts (tenant-scoped) ──────────────────────────
     with driver.session() as session:
-        node_count = session.run("MATCH (n) RETURN count(n) AS c").single()["c"]
-        rel_count = session.run("MATCH ()-[r]->() RETURN count(r) AS c").single()["c"]
-        stats["neo4j_nodes"] = node_count
-        stats["neo4j_relationships"] = rel_count
+        if prefix:
+            all_labels = [prefixed_label(tenant_id, nt.name) for nt in ontology.node_types]
+            total = 0
+            for lbl in all_labels:
+                total += session.run(f"MATCH (n:`{lbl}`) RETURN count(n) AS c").single()["c"]
+            stats["neo4j_nodes"] = total
+        else:
+            stats["neo4j_nodes"] = session.run("MATCH (n) RETURN count(n) AS c").single()["c"]
+        stats["neo4j_relationships"] = session.run(
+            "MATCH ()-[r]->() RETURN count(r) AS c"
+        ).single()["c"]
 
     return stats

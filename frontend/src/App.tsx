@@ -1,46 +1,58 @@
 import { useState, lazy, Suspense } from 'react';
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import UploadPage from '@/pages/UploadPage';
 import ReviewPage from '@/pages/ReviewPage';
+import OnboardingTour from '@/components/OnboardingTour';
 import type { ERDSchema, OntologyGenerateResponse } from '@/types/ontology';
 
 const QueryPage = lazy(() => import('@/pages/QueryPage'));
 const ExplorePage = lazy(() => import('@/pages/ExplorePage'));
 
-type Page = 'upload' | 'review' | 'query' | 'explore';
+const Loading = () => (
+  <div className="flex items-center justify-center h-40 text-muted-foreground">로딩 중...</div>
+);
 
 function App() {
-  const [page, setPage] = useState<Page>('upload');
-  const [prevPage, setPrevPage] = useState<Page>('upload');
+  const navigate = useNavigate();
+  const location = useLocation();
   const [generateResult, setGenerateResult] = useState<OntologyGenerateResponse | null>(null);
   const [erd, setErd] = useState<ERDSchema | null>(null);
 
   function handleGenerated(result: OntologyGenerateResponse, erdData: ERDSchema) {
     setGenerateResult(result);
     setErd(erdData);
-    setPage('review');
+    navigate('/review');
   }
 
   function handleBackToUpload() {
-    setPage('upload');
     setGenerateResult(null);
     setErd(null);
+    navigate('/');
   }
 
   function handleGoToQuery() {
-    setPage('query');
+    navigate('/query');
   }
 
   function handleBackToReview() {
-    setPage('review');
+    navigate('/review');
   }
+
+  const isExplore = location.pathname === '/explore';
 
   return (
     <div className="min-h-screen bg-background">
+      <OnboardingTour />
       <header className="border-b">
         <div className="container mx-auto flex items-center justify-between px-4 py-3">
-          <h1 className="text-lg font-semibold">GraphRAG 온톨로지 빌더</h1>
+          <h1
+            className="text-lg font-semibold cursor-pointer"
+            onClick={() => navigate('/')}
+          >
+            GraphRAG 온톨로지 빌더
+          </h1>
           <nav className="flex items-center gap-2">
-            {page === 'review' && (
+            {location.pathname === '/review' && (
               <button
                 onClick={handleBackToUpload}
                 className="text-sm text-muted-foreground hover:text-foreground"
@@ -49,12 +61,9 @@ function App() {
               </button>
             )}
             <button
-              onClick={() => {
-                setPrevPage(page);
-                setPage('explore');
-              }}
+              onClick={() => navigate('/explore')}
               className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                page === 'explore'
+                isExplore
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:text-foreground hover:bg-accent'
               }`}
@@ -64,21 +73,49 @@ function App() {
           </nav>
         </div>
       </header>
-      <main className={page === 'explore' ? '' : 'container mx-auto px-4 py-8'}>
-        {page === 'upload' && <UploadPage onGenerated={handleGenerated} />}
-        {page === 'review' && generateResult && erd && (
-          <ReviewPage result={generateResult} erd={erd} onGoToQuery={handleGoToQuery} />
-        )}
-        {page === 'query' && (
-          <Suspense fallback={<div className="flex items-center justify-center h-40 text-muted-foreground">로딩 중...</div>}>
-            <QueryPage onBack={handleBackToReview} />
-          </Suspense>
-        )}
-        {page === 'explore' && (
-          <Suspense fallback={<div className="flex items-center justify-center h-40 text-muted-foreground">로딩 중...</div>}>
-            <ExplorePage onBack={() => setPage(prevPage)} />
-          </Suspense>
-        )}
+      <main className={isExplore ? '' : 'container mx-auto px-4 py-8'}>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <UploadPage
+                onGenerated={handleGenerated}
+                onAutoComplete={(result, erdData) => {
+                  setGenerateResult(result);
+                  setErd(erdData);
+                  navigate('/query');
+                }}
+              />
+            }
+          />
+          <Route
+            path="/review"
+            element={
+              generateResult && erd ? (
+                <ReviewPage result={generateResult} erd={erd} onGoToQuery={handleGoToQuery} />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/query"
+            element={
+              <Suspense fallback={<Loading />}>
+                <QueryPage onBack={handleBackToReview} />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/explore"
+            element={
+              <Suspense fallback={<Loading />}>
+                <ExplorePage onBack={() => navigate(-1)} />
+              </Suspense>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </main>
     </div>
   );

@@ -25,6 +25,7 @@ class TableInfo(BaseModel):
     name: str
     columns: list[ColumnInfo]
     primary_key: str | None = None
+    primary_keys: list[str] = []  # composite PK support
 
 
 class ERDSchema(BaseModel):
@@ -100,6 +101,7 @@ class OntologyGenerateResponse(BaseModel):
     llm_diffs: list[LLMEnrichmentDiff] = []
     version_id: int | None = None
     stage: str = "fk_only"
+    warnings: list[str] = []
 
 
 # ── Ontology Version API ──────────────────────────────────────────
@@ -140,6 +142,9 @@ class KGBuildProgress(BaseModel):
     nodes_created: int = 0
     relationships_created: int = 0
     duration_seconds: float = 0.0
+    current_step: str = ""  # data_generation | fk_verification | neo4j_load | completed
+    step_number: int = 0    # 1-4
+    total_steps: int = 4
 
 
 class KGBuildErrorDetail(BaseModel):
@@ -296,3 +301,29 @@ class HealthCheckResponse(BaseModel):
     status: str
     neo4j: ServiceHealth
     postgres: ServiceHealth
+
+
+# ── DIKW Wisdom ────────────────────────────────────────────────
+
+class DIKWLayer(BaseModel):
+    level: str               # "data" | "information" | "knowledge" | "wisdom"
+    title: str
+    content: str
+    evidence: list[str] = []
+
+
+class WisdomRequest(BaseModel):
+    question: str
+
+
+class WisdomResponse(BaseModel):
+    question: str
+    intent: str              # pattern | causal | recommendation | what_if | dikw_trace
+    dikw_layers: list[DIKWLayer]
+    summary: str
+    confidence: str          # high | medium | low
+    action_items: list[str] = []
+    related_queries: list[str] = []
+    cypher_queries_used: list[str] = []
+    latency_ms: int = 0
+    llm_tokens_used: int = 0

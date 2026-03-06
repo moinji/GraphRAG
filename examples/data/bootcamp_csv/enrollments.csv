@@ -1,0 +1,16 @@
+id,student_id,course_id,enrolled_at,status
+1,1,1,2024-02-20,completed
+2,2,1,2024-02-25,completed
+3,3,2,2024-03-15,completed
+4,4,1,2024-02-28,active
+5,5,3,2024-03-10,active
+6,6,2,2024-02-22,completed
+7,7,4,2024-04-20,active
+8,8,1,2024-03-01,dropped
+9,9,3,2024-03-12,active
+10,10,5,2024-04-01,active
+11,1,4,2024-04-25,active
+12,3,3,2024-03-18,active
+13,6,4,2024-04-22,active
+14,2,6,2024-02-28,completed
+15,5,5,2024-04-05,active

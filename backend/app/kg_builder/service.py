@@ -25,6 +25,22 @@ logger = logging.getLogger(__name__)
 # In-memory job store — primary source of truth for polling
 MAX_COMPLETED_JOBS = 100
 _jobs: dict[str, KGBuildResponse] = {}
+_active_builds: set[str] = set()  # job IDs currently running
+SHUTDOWN_WAIT_MAX = 30  # max seconds to wait for active builds on shutdown
+
+
+def wait_for_active_builds() -> None:
+    """Block until all active KG builds finish, up to SHUTDOWN_WAIT_MAX seconds."""
+    if not _active_builds:
+        return
+    logger.info("Waiting for %d active KG build(s) to finish...", len(_active_builds))
+    deadline = time.monotonic() + SHUTDOWN_WAIT_MAX
+    while _active_builds and time.monotonic() < deadline:
+        time.sleep(0.5)
+    if _active_builds:
+        logger.warning("Shutdown timeout: %d build(s) still active", len(_active_builds))
+    else:
+        logger.info("All active KG builds finished.")
 
 
 def _prune_completed_jobs() -> None:
@@ -42,12 +58,36 @@ def _prune_completed_jobs() -> None:
         del _jobs[jid]
 
 
-def get_job(job_id: str) -> KGBuildResponse | None:
-    """Get job status from in-memory store."""
-    return _jobs.get(job_id)
+def get_job(job_id: str, tenant_id: str | None = None) -> KGBuildResponse | None:
+    """Get job status from in-memory store, falling back to PG."""
+    job = _jobs.get(job_id)
+    if job is not None:
+        return job
+
+    # Fallback: try PG (handles server restart)
+    try:
+        from app.db.kg_build_store import get_build
+
+        row = get_build(job_id, tenant_id=tenant_id)
+        if row is None:
+            return None
+        job = KGBuildResponse(
+            build_job_id=row["id"],
+            status=row["status"],
+            version_id=row["version_id"],
+            progress=KGBuildProgress(**(row["progress"] or {})) if row.get("progress") else None,
+            error=KGBuildErrorDetail(**(row["error"] or {})) if row.get("error") else None,
+            started_at=row.get("started_at", "").isoformat() if row.get("started_at") else None,
+            completed_at=row.get("completed_at", "").isoformat() if row.get("completed_at") else None,
+        )
+        _jobs[job_id] = job  # re-cache
+        return job
+    except Exception:
+        logger.warning("PG fallback failed for job %s", job_id, exc_info=True)
+        return None
 
 
-def create_job(job_id: str, version_id: int) -> KGBuildResponse:
+def create_job(job_id: str, version_id: int, tenant_id: str | None = None) -> KGBuildResponse:
     """Create a new queued job in memory and PG (best-effort)."""
     _prune_completed_jobs()
     job = KGBuildResponse(
@@ -61,9 +101,9 @@ def create_job(job_id: str, version_id: int) -> KGBuildResponse:
     try:
         from app.db.kg_build_store import save_build
 
-        save_build(job_id, version_id)
+        save_build(job_id, version_id, tenant_id=tenant_id)
     except Exception:
-        logger.warning("PG save_build failed for %s", job_id, exc_info=True)
+        logger.error("PG save_build failed for %s — job not persisted to DB", job_id, exc_info=True)
 
     return job
 
@@ -74,6 +114,7 @@ def run_kg_build(
     erd: ERDSchema,
     ontology: OntologySpec,
     csv_data: dict[str, list[dict]] | None = None,
+    tenant_id: str | None = None,
 ) -> None:
     """Execute the full KG build pipeline (runs in background task).
 
@@ -84,36 +125,67 @@ def run_kg_build(
     4. On success: status → succeeded with progress counts
     5. On failure: status → failed with error detail, clean partial graph
     """
+    _active_builds.add(job_id)
     started = datetime.now(timezone.utc)
     started_str = started.isoformat()
     start_time = time.monotonic()
 
     # 1. Mark running
-    _update_job(job_id, status="running", started_at=started_str)
+    _update_job(
+        job_id,
+        status="running",
+        started_at=started_str,
+        progress=KGBuildProgress(current_step="starting", step_number=0, total_steps=4),
+    )
 
     try:
-        # 2. Use CSV data if provided, otherwise generate sample data
+        # 2. Data generation / CSV
+        _update_job(
+            job_id, status="running",
+            progress=KGBuildProgress(current_step="data_generation", step_number=1, total_steps=4),
+        )
         data = csv_data if csv_data is not None else generate_sample_data(erd)
+
+        # 3. FK integrity verification
+        _update_job(
+            job_id, status="running",
+            progress=KGBuildProgress(current_step="fk_verification", step_number=2, total_steps=4),
+        )
         violations = verify_fk_integrity(data, erd)
         if violations:
             logger.warning("FK integrity violations: %s", violations)
 
-        # 3. Load to Neo4j
+        # 4. Load to Neo4j
+        _update_job(
+            job_id, status="running",
+            progress=KGBuildProgress(current_step="neo4j_load", step_number=3, total_steps=4),
+        )
         stats = load_to_neo4j(
             ontology,
             data,
             uri=settings.neo4j_uri,
             user=settings.neo4j_user,
             password=settings.neo4j_password,
+            tenant_id=tenant_id,
         )
 
-        # 4. Success
+        # 5. Invalidate entity cache after successful build
+        try:
+            from app.query.local_search import invalidate_entity_cache
+            invalidate_entity_cache(tenant_id)
+        except Exception:
+            pass
+
+        # 6. Success
         duration = time.monotonic() - start_time
         completed_str = datetime.now(timezone.utc).isoformat()
         progress = KGBuildProgress(
             nodes_created=stats.get("nodes", 0),
             relationships_created=stats.get("relationships", 0),
             duration_seconds=round(duration, 1),
+            current_step="completed",
+            step_number=4,
+            total_steps=4,
         )
         _update_job(
             job_id,
@@ -150,6 +222,9 @@ def run_kg_build(
 
         logger.error("KG build %s failed: %s", job_id, exc, exc_info=True)
 
+    finally:
+        _active_builds.discard(job_id)
+
 
 def _update_job(
     job_id: str,
@@ -185,4 +260,4 @@ def _update_job(
             completed_at=completed_at,
         )
     except Exception:
-        logger.warning("PG update_build failed for %s", job_id, exc_info=True)
+        logger.error("PG update_build failed for %s — status not synced to DB", job_id, exc_info=True)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from app.db.pg_client import approve_version, get_version, update_version
 from app.evaluation.evaluator import evaluate
@@ -18,14 +18,16 @@ from app.models.schemas import (
     OntologyUpdateResponse,
     OntologyVersionResponse,
 )
+from app.tenant import get_tenant_id
 
 router = APIRouter(prefix="/api/v1/ontology/versions", tags=["ontology-versions"])
 
 
 @router.get("/{version_id}", response_model=OntologyVersionResponse)
-def get_ontology_version(version_id: int) -> OntologyVersionResponse:
+def get_ontology_version(version_id: int, request: Request) -> OntologyVersionResponse:
     """Retrieve an ontology version by id."""
-    row = get_version(version_id)
+    tenant_id = get_tenant_id(request)
+    row = get_version(version_id, tenant_id=tenant_id)
     if row is None:
         raise VersionNotFoundError(version_id)
 
@@ -41,10 +43,11 @@ def get_ontology_version(version_id: int) -> OntologyVersionResponse:
 
 @router.put("/{version_id}", response_model=OntologyUpdateResponse)
 def update_ontology_version(
-    version_id: int, body: OntologyUpdateRequest
+    version_id: int, body: OntologyUpdateRequest, request: Request,
 ) -> OntologyUpdateResponse:
     """Update ontology for a draft version. Re-calculates evaluation."""
-    row = get_version(version_id)
+    tenant_id = get_tenant_id(request)
+    row = get_version(version_id, tenant_id=tenant_id)
     if row is None:
         raise VersionNotFoundError(version_id)
 
@@ -60,7 +63,7 @@ def update_ontology_version(
     ontology_dict = ontology.model_dump()
     eval_dict = eval_metrics.model_dump()
 
-    updated = update_version(version_id, ontology_dict, eval_dict)
+    updated = update_version(version_id, ontology_dict, eval_dict, tenant_id=tenant_id)
 
     return OntologyUpdateResponse(
         version_id=version_id,
@@ -70,16 +73,17 @@ def update_ontology_version(
 
 
 @router.post("/{version_id}/approve", response_model=OntologyApproveResponse)
-def approve_ontology_version(version_id: int) -> OntologyApproveResponse:
+def approve_ontology_version(version_id: int, request: Request) -> OntologyApproveResponse:
     """Approve a draft version (draft → approved)."""
-    row = get_version(version_id)
+    tenant_id = get_tenant_id(request)
+    row = get_version(version_id, tenant_id=tenant_id)
     if row is None:
         raise VersionNotFoundError(version_id)
 
     if row.get("status") == "approved":
         raise VersionConflictError(f"Version {version_id} is already approved")
 
-    approve_version(version_id)
+    approve_version(version_id, tenant_id=tenant_id)
 
     return OntologyApproveResponse(
         version_id=version_id,
