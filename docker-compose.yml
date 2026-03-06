@@ -2,17 +2,16 @@ services:
   neo4j:
     image: neo4j:5-community
     container_name: graphrag-neo4j
-    profiles: ["local"]
     ports:
       - "7474:7474"
       - "7687:7687"
     environment:
-      NEO4J_AUTH: neo4j/password123
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-password123}
       NEO4J_PLUGINS: '[]'
     volumes:
       - neo4j_data:/data
     healthcheck:
-      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "password123", "RETURN 1"]
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${NEO4J_PASSWORD:-password123}", "RETURN 1"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -24,16 +23,17 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: graphrag
-      POSTGRES_PASSWORD: graphrag123
-      POSTGRES_DB: graphrag_meta
+      POSTGRES_USER: ${POSTGRES_USER:-graphrag}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-graphrag123}
+      POSTGRES_DB: ${POSTGRES_DB:-graphrag_meta}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U graphrag -d graphrag_meta"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-graphrag} -d ${POSTGRES_DB:-graphrag_meta}"]
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   backend:
     build:
@@ -42,8 +42,21 @@ services:
     container_name: graphrag-backend
     ports:
       - "8000:8000"
-    env_file:
-      - .env
+    environment:
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-password123}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-graphrag}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-graphrag123}
+      POSTGRES_DB: ${POSTGRES_DB:-graphrag_meta}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      APP_ENV: ${APP_ENV:-production}
+      APP_API_KEY: ${APP_API_KEY:-}
+      TENANT_KEYS: ${TENANT_KEYS:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
     depends_on:
       postgres:
         condition: service_healthy
@@ -65,7 +78,8 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
