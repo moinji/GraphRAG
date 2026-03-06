@@ -257,3 +257,18 @@ export async function resetGraph(): Promise<GraphResetResponse> {
     method: 'DELETE',
   });
 }
+
+export async function generateDDLFromNL(
+  description: string,
+): Promise<{ ddl: string; erd: ERDSchema | null }> {
+  return request<{ ddl: string; erd: ERDSchema | null }>(
+    `${BASE}/ddl/generate-from-nl`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description }),
+    },
+    undefined,
+    LONG_TIMEOUT_MS,
+  );
+}

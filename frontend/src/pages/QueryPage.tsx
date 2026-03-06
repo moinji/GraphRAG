@@ -72,9 +72,11 @@ export default function QueryPage({ onBack }: QueryPageProps) {
         </h2>
         <div className="flex items-center gap-3">
           {/* A/B/W Mode Toggle */}
-          <div className="flex items-center gap-1 rounded-lg border p-1">
+          <div className="flex items-center gap-1 rounded-lg border p-1" role="radiogroup" aria-label="질의 모드 선택">
             <button
               onClick={() => setMode('a')}
+              role="radio"
+              aria-checked={mode === 'a'}
               className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
                 mode === 'a'
                   ? 'bg-blue-600 text-white'
@@ -85,6 +87,8 @@ export default function QueryPage({ onBack }: QueryPageProps) {
             </button>
             <button
               onClick={() => setMode('b')}
+              role="radio"
+              aria-checked={mode === 'b'}
               className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
                 mode === 'b'
                   ? 'bg-orange-600 text-white'
@@ -95,6 +99,8 @@ export default function QueryPage({ onBack }: QueryPageProps) {
             </button>
             <button
               onClick={() => setMode('w')}
+              role="radio"
+              aria-checked={mode === 'w'}
               className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
                 mode === 'w'
                   ? 'bg-amber-600 text-white'
@@ -153,7 +159,7 @@ export default function QueryPage({ onBack }: QueryPageProps) {
       </div>
 
       {/* Chat messages */}
-      <div className="flex-1 overflow-y-auto space-y-3 mb-4">
+      <div className="flex-1 overflow-y-auto space-y-3 mb-4" role="log" aria-live="polite" aria-label="채팅 메시지">
         {messages.length === 0 && (
           <p className="text-center text-muted-foreground mt-8">
             {mode === 'w'
@@ -190,7 +196,7 @@ export default function QueryPage({ onBack }: QueryPageProps) {
           </div>
         ))}
         {sending && (
-          <div className="flex justify-start">
+          <div className="flex justify-start" role="status" aria-label="답변 생성 중">
             <div className={`rounded-lg p-3 text-sm text-muted-foreground animate-pulse ${
               mode === 'w' ? 'bg-amber-50 border border-amber-200' : 'bg-muted'
             }`}>
@@ -294,6 +300,7 @@ function AssistantDetail({ data }: { data: QueryResponse }) {
         <div>
           <button
             onClick={() => setShowCypher(!showCypher)}
+            aria-expanded={showCypher}
             className="text-xs text-muted-foreground hover:text-foreground"
           >
             {showCypher ? '▼ Cypher (쿼리)' : '▶ Cypher (쿼리)'}
@@ -311,6 +318,7 @@ function AssistantDetail({ data }: { data: QueryResponse }) {
         <div>
           <button
             onClick={() => setShowSubgraph(!showSubgraph)}
+            aria-expanded={showSubgraph}
             className="text-xs text-muted-foreground hover:text-foreground"
           >
             {showSubgraph ? '▼' : '▶'} 서브그래프 컨텍스트
@@ -328,6 +336,7 @@ function AssistantDetail({ data }: { data: QueryResponse }) {
         <div>
           <button
             onClick={() => setShowPaths(!showPaths)}
+            aria-expanded={showPaths}
             className="text-xs text-muted-foreground hover:text-foreground"
           >
             {showPaths ? '▼' : '▶'} 근거 경로 ({data.paths.length})
@@ -346,7 +355,7 @@ function AssistantDetail({ data }: { data: QueryResponse }) {
 
       {/* Error */}
       {data.error && (
-        <p className="text-xs text-destructive">{data.error}</p>
+        <p className="text-xs text-destructive" role="alert">{data.error}</p>
       )}
     </div>
   );

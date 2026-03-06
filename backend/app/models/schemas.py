@@ -33,6 +33,15 @@ class ERDSchema(BaseModel):
     foreign_keys: list[ForeignKey]
 
 
+class NLToDDLRequest(BaseModel):
+    description: str
+
+
+class NLToDDLResponse(BaseModel):
+    ddl: str
+    erd: ERDSchema | None = None
+
+
 # ── Ontology Spec ──────────────────────────────────────────────────
 
 class NodeProperty(BaseModel):

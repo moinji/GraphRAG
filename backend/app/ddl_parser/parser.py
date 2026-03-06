@@ -93,13 +93,13 @@ def parse_ddl(ddl_text: str) -> ERDSchema:
     current_table: str | None = None
     for line in ddl_text.split("\n"):
         # Skip VIEW/TYPE/ENUM lines
-        if re.match(r"CREATE\s+(?:OR\s+REPLACE\s+)?(?:VIEW|TYPE|ENUM|INDEX|SEQUENCE|FUNCTION|TRIGGER)\b", line, re.IGNORECASE):
+        if re.match(r"\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:VIEW|TYPE|ENUM|INDEX|SEQUENCE|FUNCTION|TRIGGER)\b", line, re.IGNORECASE):
             current_table = None
             continue
 
         # Match CREATE TABLE with optional IF NOT EXISTS and schema prefix
         create_match = re.match(
-            r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:\"?\w+\"?\.)?\"?(\w+)\"?", line, re.IGNORECASE
+            r"\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:\"?\w+\"?\.)?\"?(\w+)\"?", line, re.IGNORECASE
         )
         if create_match:
             current_table = create_match.group(1)

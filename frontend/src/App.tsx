@@ -42,6 +42,12 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md"
+      >
+        본문으로 건너뛰기
+      </a>
       <OnboardingTour />
       <header className="border-b">
         <div className="container mx-auto flex items-center justify-between px-4 py-3">
@@ -73,7 +79,7 @@ function App() {
           </nav>
         </div>
       </header>
-      <main className={isExplore ? '' : 'container mx-auto px-4 py-8'}>
+      <main id="main-content" className={isExplore ? '' : 'container mx-auto px-4 py-8'}>
         <Routes>
           <Route
             path="/"

@@ -213,7 +213,7 @@
 - [x] #9 Composite PK parsing — sqlglot AST + regex fallback (`parser.py`)
 - [x] #10 Best-effort fix — `error` log level + `warnings[]` in response (`pipeline.py`, `service.py`)
 
-### P2 — In Progress
+### P2 — All Complete
 - [x] #14 Neo4j 인덱스 자동 생성 — `name` 프로퍼티 인덱스 + UNWIND 배치 5000건 제한 (`loader.py`)
 - [x] #12 LLM 토큰 추적 — 중앙 tracker (`llm_tracker.py`), 5개 LLM caller 연동, `GET /api/v1/llm-usage` 엔드포인트
 - [x] #15 구조화 로깅 — JSON(prod) / colored text(dev) 듀얼 포맷 (`logging_config.py`)
@@ -222,7 +222,15 @@
 - [x] #17 도메인별 평가 — 이커머스 감지 + auto-golden 생성 (`auto_golden.py`, `pipeline.py`)
 - [x] #11 Multi-tenancy foundation — tenant.py 유틸, 3-mode auth, PG tenant_id 컬럼, Neo4j label prefix, 전체 router/service tenant_id threading, 프론트엔드 API key header
 
-**Test results:** 242 tests passing (25 new multi-tenancy), frontend build clean.
+### P3 — All Complete
+- [x] #20 Multilingual Q&A — English regex patterns (Q1-Q5), bilingual answer generation, English demo buttons
+- [x] #18 Onboarding tour — 4-step first-visit guide with localStorage (`OnboardingTour.tsx`)
+- [x] #21 Graceful shutdown — `wait_for_active_builds()` + 30s timeout on shutdown (`service.py`, `main.py`)
+- [x] #22 Schema prefix / VIEW / ENUM parsing — schema prefix strip, VIEW/ENUM skip, IF NOT EXISTS (`parser.py`)
+- [x] #19 Accessibility — aria-live, role=log/status/alert, aria-expanded, skip-to-content, keyboard nav
+- [x] #23 NL→DDL — LLM-based DDL generation from NL (`nl_to_ddl.py`), POST /api/v1/ddl/generate-from-nl, frontend UI
+
+**Test results:** 259 tests passing (17 new: 8 query + 3 parser + 4 NL→DDL + 2 clean_ddl), frontend build clean.
 
 ---
 

@@ -288,7 +288,7 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
 
       {/* Backend warnings */}
       {result.warnings?.length > 0 && (
-        <div className="rounded-lg border border-amber-400 bg-amber-50 p-3 text-sm text-amber-800 space-y-1">
+        <div role="alert" className="rounded-lg border border-amber-400 bg-amber-50 p-3 text-sm text-amber-800 space-y-1">
           {result.warnings.map((w, i) => (
             <p key={i}>{w}</p>
           ))}
@@ -297,12 +297,12 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
 
       {/* Messages */}
       {error && (
-        <div className="rounded-lg border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
+        <div role="alert" className="rounded-lg border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
           {error}
         </div>
       )}
       {successMsg && (
-        <div className="rounded-lg border border-green-500 bg-green-50 p-3 text-sm text-green-800">
+        <div role="status" aria-live="polite" className="rounded-lg border border-green-500 bg-green-50 p-3 text-sm text-green-800">
           {successMsg}
         </div>
       )}

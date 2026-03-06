@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { uploadDDL, generateOntology, approveVersion, startKGBuild, getKGBuildStatus } from '@/api/client';
+import { uploadDDL, generateOntology, approveVersion, startKGBuild, getKGBuildStatus, generateDDLFromNL } from '@/api/client';
 import { BUILD_POLL_INTERVAL_MS } from '@/constants';
 import type { ERDSchema, OntologyGenerateResponse } from '@/types/ontology';
 
@@ -30,6 +30,9 @@ export default function UploadPage({ onGenerated, onAutoComplete }: UploadPagePr
   const [error, setError] = useState<string | null>(null);
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
   const [autoStep, setAutoStep] = useState<string | null>(null);
+  const [nlInput, setNlInput] = useState('');
+  const [nlGenerating, setNlGenerating] = useState(false);
+  const [generatedDDL, setGeneratedDDL] = useState<string | null>(null);
 
   // FK lookup: target_table → source entries
   const fkBySource = new Map<string, { source_column: string; target_table: string; target_column: string }[]>();
@@ -66,6 +69,24 @@ export default function UploadPage({ onGenerated, onAutoComplete }: UploadPagePr
       setError(e instanceof Error ? e.message : 'Generation failed');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleNLGenerate() {
+    if (!nlInput.trim()) return;
+    setNlGenerating(true);
+    setError(null);
+    setGeneratedDDL(null);
+    try {
+      const result = await generateDDLFromNL(nlInput);
+      setGeneratedDDL(result.ddl);
+      if (result.erd) {
+        setErd(result.erd);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'DDL generation failed');
+    } finally {
+      setNlGenerating(false);
     }
   }
 
@@ -165,6 +186,46 @@ export default function UploadPage({ onGenerated, onAutoComplete }: UploadPagePr
         </CardContent>
       </Card>
 
+      {/* NL → DDL */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">NL → DDL (자연어로 스키마 생성)</CardTitle>
+          <CardDescription>
+            도메인을 자연어로 설명하면 DDL을 자동 생성합니다. (LLM API 키 필요)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <textarea
+            value={nlInput}
+            onChange={(e) => setNlInput(e.target.value)}
+            placeholder="예: 온라인 쇼핑몰 — 고객, 상품, 주문, 리뷰, 카테고리가 있고 고객이 주문하고 상품에 리뷰를 남김"
+            aria-label="도메인 설명 입력"
+            rows={3}
+            className="w-full rounded-lg border p-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+            disabled={nlGenerating}
+          />
+          <Button
+            onClick={handleNLGenerate}
+            disabled={!nlInput.trim() || nlGenerating}
+            variant="outline"
+          >
+            {nlGenerating ? 'DDL 생성 중...' : 'DDL 생성'}
+          </Button>
+          {generatedDDL && (
+            <div className="space-y-2">
+              <pre className="rounded-lg border bg-muted p-3 text-xs overflow-x-auto max-h-64 overflow-y-auto">
+                {generatedDDL}
+              </pre>
+              {erd && (
+                <Badge variant="outline" className="text-xs border-green-500 text-green-600">
+                  ERD 파싱 완료: {erd.tables.length} tables, {erd.foreign_keys.length} FKs
+                </Badge>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {erd && (
         <>
           {/* Summary counts */}
@@ -210,8 +271,18 @@ export default function UploadPage({ onGenerated, onAutoComplete }: UploadPagePr
                       return (
                         <TableRow
                           key={table.name}
+                          tabIndex={0}
+                          role="button"
+                          aria-expanded={isExpanded}
+                          aria-label={`${table.name} 테이블 상세`}
                           className="cursor-pointer hover:bg-muted/50"
                           onClick={() => setExpandedTable(isExpanded ? null : table.name)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setExpandedTable(isExpanded ? null : table.name);
+                            }
+                          }}
                         >
                           <TableCell className="font-medium">{table.name}</TableCell>
                           <TableCell className="text-center">{table.columns.length}</TableCell>
@@ -374,8 +445,8 @@ export default function UploadPage({ onGenerated, onAutoComplete }: UploadPagePr
                 </Button>
               </div>
               {autoStep && (
-                <div className="flex items-center gap-2">
-                  <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+                <div className="flex items-center gap-2" role="status" aria-live="polite">
+                  <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden" role="progressbar" aria-label="Auto Demo 진행률">
                     <div className="h-full bg-amber-500 rounded-full animate-pulse" style={{ width: '60%' }} />
                   </div>
                   <span className="text-xs text-muted-foreground whitespace-nowrap">{autoStep}</span>
@@ -387,7 +458,7 @@ export default function UploadPage({ onGenerated, onAutoComplete }: UploadPagePr
       )}
 
       {error && (
-        <div className="rounded-lg border border-destructive bg-destructive/10 p-4 text-sm text-destructive">
+        <div role="alert" className="rounded-lg border border-destructive bg-destructive/10 p-4 text-sm text-destructive">
           {error}
         </div>
       )}
