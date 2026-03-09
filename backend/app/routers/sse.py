@@ -14,7 +14,12 @@ from typing import AsyncGenerator
 from fastapi import APIRouter, Request
 from sse_starlette.sse import EventSourceResponse
 
-from app.exceptions import BuildJobNotFoundError, QueryRoutingError
+from app.exceptions import (
+    BuildJobNotFoundError,
+    CypherExecutionError,
+    LocalSearchError,
+    QueryRoutingError,
+)
 from app.kg_builder.service import get_job
 from app.models.schemas import QueryRequest
 from app.tenant import get_tenant_id
@@ -92,8 +97,14 @@ async def _query_stream_generator(
                 return
             event_type = event.pop("_event", "token")
             yield {"event": event_type, "data": json.dumps(event, ensure_ascii=False)}
+    except LocalSearchError as e:
+        logger.warning("Local search stream error: %s", e)
+        yield {"event": "error", "data": json.dumps({"detail": e.detail})}
+    except CypherExecutionError as e:
+        logger.warning("Cypher execution stream error: %s", e)
+        yield {"event": "error", "data": json.dumps({"detail": e.detail})}
     except Exception as e:
-        logger.error("Query stream error: %s", e, exc_info=True)
+        logger.error("Unexpected query stream error: %s", e, exc_info=True)
         yield {"event": "error", "data": json.dumps({"detail": str(e)})}
 
 

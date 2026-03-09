@@ -3,11 +3,16 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { sendQuery, sendWisdomQuery } from '@/api/client';
 import { streamQuery } from '@/api/sse';
-import { DEMO_QUESTIONS, DEMO_QUESTIONS_EN, WISDOM_DEMO_QUESTIONS } from '@/constants';
+import { DEMO_QUESTIONS, DEMO_QUESTIONS_EN, WISDOM_DEMO_QUESTIONS, SSE_STREAM_TIMEOUT_MS } from '@/constants';
 import DIKWTimeline from '@/components/wisdom/DIKWTimeline';
 import type { ChatMessage, QueryResponse } from '@/types/ontology';
 
 type Mode = 'a' | 'b' | 'w';
+
+let _msgSeq = 0;
+function msgId(): string {
+  return `msg_${Date.now()}_${++_msgSeq}`;
+}
 
 interface QueryPageProps {
   onBack: () => void;
@@ -26,10 +31,22 @@ export default function QueryPage({ onBack }: QueryPageProps) {
 
   const abortRef = useRef<AbortController | null>(null);
 
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function updateMsg(id: string, patch: Partial<ChatMessage>) {
+    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+  }
+
+  function cleanupStream() {
+    abortRef.current = null;
+    if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+    setSending(false);
+  }
+
   async function handleSend(question: string) {
     if (!question.trim() || sending) return;
 
-    const userMsg: ChatMessage = { role: 'user', content: question };
+    const userMsg: ChatMessage = { id: msgId(), role: 'user', content: question };
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
     setSending(true);
@@ -38,7 +55,7 @@ export default function QueryPage({ onBack }: QueryPageProps) {
       if (mode === 'w') {
         const wisdomData = await sendWisdomQuery(question);
         const assistantMsg: ChatMessage = {
-          role: 'assistant',
+          id: msgId(), role: 'assistant',
           content: wisdomData.summary || 'DIKW 분석이 완료되었습니다.',
           wisdomData,
         };
@@ -46,64 +63,44 @@ export default function QueryPage({ onBack }: QueryPageProps) {
         setSending(false);
       } else if (mode === 'b') {
         // SSE streaming for mode B
-        const placeholder: ChatMessage = { role: 'assistant', content: '', streaming: true };
+        const asstId = msgId();
+        const placeholder: ChatMessage = { id: asstId, role: 'assistant', content: '', streaming: true };
         setMessages((prev) => [...prev, placeholder]);
+
+        // Timeout safety: abort if no complete event within limit
+        timeoutRef.current = setTimeout(() => {
+          abortRef.current?.abort();
+          updateMsg(asstId, { streaming: false });
+          setSending(false);
+        }, SSE_STREAM_TIMEOUT_MS);
 
         abortRef.current = streamQuery(question, mode, {
           onMetadata: (meta) => {
-            setMessages((prev) => {
-              const updated = [...prev];
-              const last = updated[updated.length - 1];
-              updated[updated.length - 1] = { ...last, data: meta as QueryResponse };
-              return updated;
-            });
+            updateMsg(asstId, { data: meta as QueryResponse });
           },
           onToken: (token) => {
-            setMessages((prev) => {
-              const updated = [...prev];
-              const last = updated[updated.length - 1];
-              updated[updated.length - 1] = { ...last, content: last.content + token };
-              return updated;
-            });
+            setMessages((prev) => prev.map((m) =>
+              m.id === asstId ? { ...m, content: m.content + token } : m,
+            ));
           },
           onComplete: (data) => {
-            setMessages((prev) => {
-              const updated = [...prev];
-              updated[updated.length - 1] = {
-                role: 'assistant',
-                content: data.answer,
-                data,
-                streaming: false,
-              };
-              return updated;
-            });
-            setSending(false);
-            abortRef.current = null;
+            updateMsg(asstId, { content: data.answer, data, streaming: false });
+            cleanupStream();
           },
           onError: (error) => {
-            setMessages((prev) => {
-              const updated = [...prev];
-              const last = updated[updated.length - 1];
-              if (last.streaming) {
-                updated[updated.length - 1] = {
-                  role: 'assistant',
-                  content: last.content || error.message,
-                  streaming: false,
-                };
-              } else {
-                updated.push({ role: 'assistant', content: error.message });
-              }
-              return updated;
-            });
-            setSending(false);
-            abortRef.current = null;
+            setMessages((prev) => prev.map((m) =>
+              m.id === asstId
+                ? { ...m, content: m.content || error.message, streaming: false }
+                : m,
+            ));
+            cleanupStream();
           },
         });
       } else {
         // Mode A: regular fetch
         const data = await sendQuery(question, mode);
         const assistantMsg: ChatMessage = {
-          role: 'assistant',
+          id: msgId(), role: 'assistant',
           content: data.answer,
           data,
         };
@@ -112,7 +109,7 @@ export default function QueryPage({ onBack }: QueryPageProps) {
       }
     } catch (e) {
       const errorMsg: ChatMessage = {
-        role: 'assistant',
+        id: msgId(), role: 'assistant',
         content: e instanceof Error ? e.message : 'Query failed',
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -231,12 +228,13 @@ export default function QueryPage({ onBack }: QueryPageProps) {
               : '위 데모 질문을 클릭하거나 아래에 직접 질문을 입력하세요.'}
           </p>
         )}
-        {messages.map((msg, i) => (
+        {messages.map((msg) => (
           <div
-            key={i}
+            key={msg.id}
             className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
+              aria-busy={msg.streaming ?? false}
               className={`rounded-lg p-3 text-sm ${
                 msg.role === 'user'
                   ? 'max-w-[80%] bg-primary text-primary-foreground'
@@ -298,6 +296,8 @@ export default function QueryPage({ onBack }: QueryPageProps) {
         <Button
           onClick={() => handleSend(input)}
           disabled={!input.trim() || sending}
+          aria-busy={sending}
+          aria-label={sending ? '답변 생성 중' : '질문 전송'}
           className="self-end"
         >
           {sending ? '...' : '전송'}

@@ -26,3 +26,4 @@ export const GRAPH_DEFAULT_LIMIT = 500;
 export const BUILD_POLL_INTERVAL_MS = 2000;
 export const SEARCH_DEBOUNCE_MS = 300;
 export const SUCCESS_MSG_TIMEOUT_MS = 5000;
+export const SSE_STREAM_TIMEOUT_MS = 120_000; // 2 min max for LLM streaming
