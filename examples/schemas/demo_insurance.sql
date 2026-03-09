@@ -1,5 +1,5 @@
 -- Insurance Management System
--- 12 tables, 15 FKs
+-- 12 tables, 12 FKs
 
 CREATE TABLE agents (
     id          INT PRIMARY KEY,

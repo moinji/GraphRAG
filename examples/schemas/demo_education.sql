@@ -1,5 +1,5 @@
 -- Education / Learning Management System
--- 11 tables, 14 FKs
+-- 11 tables, 15 FKs
 
 CREATE TABLE departments (
     id          INT PRIMARY KEY,
