@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     csv_max_files: int = 50
 
     # App
+    port: int = 8080  # Cloud Run uses PORT env var
     app_env: str = "development"
     ddl_max_size_mb: int = 10
     app_api_key: str | None = None  # Set to enable API key auth (single-tenant)

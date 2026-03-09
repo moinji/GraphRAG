@@ -12,9 +12,22 @@ RUN npm run build
 # Stage 2: Serve
 FROM nginx:1.27-alpine
 
-COPY --from=build /app/dist /usr/share/nginx/html
-COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+RUN apk add --no-cache curl
 
-EXPOSE 80
+COPY --from=build /app/dist /usr/share/nginx/html
+COPY frontend/nginx.conf /etc/nginx/templates/default.conf.template
+
+# Cloud Run uses PORT env var (default 8080)
+# BACKEND_URL: Cloud Run backend service URL
+ENV PORT=8080
+ENV BACKEND_URL=http://backend:8000
+
+EXPOSE ${PORT}
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/health || exit 1
+
+# Restrict envsubst to only our variables (protect $host, $uri, $remote_addr etc.)
+ENV NGINX_ENVSUBST_FILTER=^(PORT|BACKEND_URL)$
 
 CMD ["nginx", "-g", "daemon off;"]
