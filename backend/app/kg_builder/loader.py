@@ -286,6 +286,25 @@ def _ensure_name(label: str, rows: list[dict], prop_names: list[str]) -> list[di
     return enriched
 
 
+def load_from_mapping(
+    mapping_config: "DomainMappingConfig",
+    data: dict[str, list[dict]],
+    uri: str,
+    user: str,
+    password: str,
+    tenant_id: str | None = None,
+) -> dict[str, int]:
+    """Load to Neo4j using a YAML DomainMappingConfig.
+
+    Converts the mapping config to OntologySpec and delegates to load_to_neo4j.
+    Phase 1: conversion + delegation. Phase 2: direct Cypher from YAML.
+    """
+    from app.mapping.converter import mapping_to_ontology
+
+    ontology = mapping_to_ontology(mapping_config)
+    return load_to_neo4j(ontology, data, uri, user, password, tenant_id)
+
+
 def load_to_neo4j(
     ontology: OntologySpec,
     data: dict[str, list[dict]],
@@ -313,12 +332,14 @@ def load_to_neo4j(
             session.execute_write(_clean_db)
 
         # ── 2. Constraints + Indexes ────────────────────────────────
+        # Index all non-key properties for fast local search & template queries
         for nt in ontology.node_types:
             key_prop = _find_key_prop(nt)
             lbl = prefixed_label(tenant_id, nt.name)
             session.execute_write(_create_constraint, lbl, key_prop)
-            if key_prop != "name":
-                session.execute_write(_create_index, lbl, "name")
+            for prop in nt.properties:
+                if prop.name != key_prop:
+                    session.execute_write(_create_index, lbl, prop.name)
 
         # ── 3. Nodes ──────────────────────────────────────────────
         for nt in ontology.node_types:

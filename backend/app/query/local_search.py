@@ -452,18 +452,31 @@ def run_local_query(
 # ── Streaming variants ───────────────────────────────────────────
 
 
+class _StreamResult:
+    """Thread-safe container for streaming LLM usage data."""
+    __slots__ = ("input_tokens", "output_tokens")
+
+    def __init__(self) -> None:
+        self.input_tokens = 0
+        self.output_tokens = 0
+
+    @property
+    def total(self) -> int:
+        return self.input_tokens + self.output_tokens
+
+
 async def _stream_llm_tokens(
-    question: str, subgraph_text: str,
+    question: str, subgraph_text: str, usage_out: _StreamResult,
 ) -> AsyncGenerator[str, None]:
-    """Stream LLM answer tokens via asyncio.Queue bridging sync→async."""
+    """Stream LLM answer tokens via asyncio.Queue bridging sync→async.
+
+    Usage data is written to the `usage_out` container (thread-safe per-call).
+    """
     messages = build_local_search_messages(question, subgraph_text)
     queue: asyncio.Queue[str | None] = asyncio.Queue()
 
-    def _sync_stream() -> tuple[int, int]:
+    def _sync_stream() -> None:
         """Run synchronous LLM streaming in a thread, push tokens to queue."""
-        input_tokens = 0
-        output_tokens = 0
-
         if settings.openai_api_key:
             try:
                 from openai import OpenAI
@@ -480,10 +493,10 @@ async def _stream_llm_tokens(
                     if chunk.choices and chunk.choices[0].delta.content:
                         queue.put_nowait(chunk.choices[0].delta.content)
                     if chunk.usage:
-                        input_tokens = chunk.usage.prompt_tokens
-                        output_tokens = chunk.usage.completion_tokens
+                        usage_out.input_tokens = chunk.usage.prompt_tokens
+                        usage_out.output_tokens = chunk.usage.completion_tokens
                 queue.put_nowait(None)
-                return input_tokens, output_tokens
+                return
             except Exception as e:
                 logger.warning("OpenAI streaming failed, trying Anthropic: %s", e)
 
@@ -501,10 +514,10 @@ async def _stream_llm_tokens(
                     for text in stream.text_stream:
                         queue.put_nowait(text)
                     msg = stream.get_final_message()
-                    input_tokens = msg.usage.input_tokens
-                    output_tokens = msg.usage.output_tokens
+                    usage_out.input_tokens = msg.usage.input_tokens
+                    usage_out.output_tokens = msg.usage.output_tokens
                 queue.put_nowait(None)
-                return input_tokens, output_tokens
+                return
             except Exception as e:
                 queue.put_nowait(None)
                 raise LocalSearchError(f"LLM streaming failed: {e}")
@@ -521,10 +534,7 @@ async def _stream_llm_tokens(
             break
         yield token
 
-    # Get usage from completed task
-    result = await task
-    # Store usage in a way accessible to caller
-    _stream_llm_tokens._last_usage = result  # type: ignore[attr-defined]
+    await task  # propagate exceptions
 
 
 async def run_local_query_stream(
@@ -551,13 +561,13 @@ async def run_local_query_stream(
         yield {"_event": "metadata", "cypher": agg_cypher, "template_id": "local_aggregate",
                "route": "local_search", "subgraph_context": subgraph_text}
 
+        usage = _StreamResult()
         full_answer = ""
-        async for token in _stream_llm_tokens(question, subgraph_text):
+        async for token in _stream_llm_tokens(question, subgraph_text, usage):
             full_answer += token
             yield {"_event": "token", "token": token}
 
-        usage = getattr(_stream_llm_tokens, "_last_usage", (0, 0))
-        tokens = usage[0] + usage[1]
+        tokens = usage.total
         answer, paths = parse_local_answer(full_answer)
         latency_ms = int((time.time() - start_time) * 1000)
 
@@ -607,13 +617,13 @@ async def run_local_query_stream(
     yield {"_event": "metadata", "cypher": cypher, "template_id": "local_subgraph",
            "route": "local_search", "subgraph_context": subgraph_text}
 
+    usage = _StreamResult()
     full_answer = ""
-    async for token in _stream_llm_tokens(question, subgraph_text):
+    async for token in _stream_llm_tokens(question, subgraph_text, usage):
         full_answer += token
         yield {"_event": "token", "token": token}
 
-    usage = getattr(_stream_llm_tokens, "_last_usage", (0, 0))
-    tokens = usage[0] + usage[1]
+    tokens = usage.total
     answer, paths = parse_local_answer(full_answer)
     latency_ms = int((time.time() - start_time) * 1000)
 

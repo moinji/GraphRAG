@@ -11,7 +11,7 @@ import re
 import time
 
 from app.config import settings
-from app.exceptions import LocalSearchError
+from app.exceptions import WisdomError
 from app.models.schemas import DIKWLayer, WisdomResponse
 from app.query.wisdom_collector import collect_data
 from app.query.wisdom_prompts import (
@@ -152,9 +152,9 @@ def _generate_wisdom(
             return _parse_wisdom_response(raw_text, tokens)
         except Exception as e:
             logger.warning("Anthropic wisdom also failed: %s", e)
-            raise LocalSearchError(f"Wisdom LLM generation failed: {e}")
+            raise WisdomError(f"Wisdom LLM generation failed: {e}")
 
-    raise LocalSearchError("No LLM API key configured for wisdom engine")
+    raise WisdomError("No LLM API key configured for wisdom engine")
 
 
 def _parse_wisdom_response(

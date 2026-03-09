@@ -204,3 +204,37 @@ class TestWisdomAPI:
 
         routes = [r.path for r in app.routes]
         assert "/api/v1/wisdom/query" in routes
+
+    def test_wisdom_error_handler_registered(self):
+        """WisdomError should map to 502."""
+        from app.main import app
+        from app.exceptions import WisdomError
+
+        assert WisdomError in app.exception_handlers
+
+    def test_llm_enrichment_error_handler_registered(self):
+        """LLMEnrichmentError should map to 502."""
+        from app.main import app
+        from app.exceptions import LLMEnrichmentError
+
+        assert LLMEnrichmentError in app.exception_handlers
+
+    def test_wisdom_api_no_llm_key(self):
+        """Without LLM API keys, should return 502 WisdomError."""
+        from starlette.testclient import TestClient
+        from app.main import create_app
+
+        app = create_app()
+        with TestClient(app) as client:
+            with patch("app.query.wisdom_engine.settings") as mock_settings:
+                mock_settings.openai_api_key = None
+                mock_settings.anthropic_api_key = None
+                mock_settings.wisdom_model = "gpt-4o"
+                mock_settings.wisdom_max_tokens = 4096
+                mock_settings.anthropic_model = "claude-sonnet-4-20250514"
+                resp = client.post(
+                    "/api/v1/wisdom/query",
+                    json={"question": "고객 패턴을 분석해줘"},
+                )
+                assert resp.status_code == 502
+                assert "Wisdom" in resp.json().get("detail", "") or "LLM" in resp.json().get("detail", "")

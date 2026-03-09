@@ -238,6 +238,12 @@ docker exec graphrag-neo4j cypher-shell \
 | `GET` | `/api/v1/metrics/kpi-report` | KPI 리포트 (TTV, 정확도) |
 | `POST` | `/api/v1/evaluation/run` | A/B 평가 실행 |
 | `GET` | `/api/v1/evaluation/golden` | 골든 QA 데이터 조회 |
+| `POST` | `/api/v1/wisdom/query` | DIKW 인사이트 분석 (Wisdom 레이어) |
+| `GET` | `/api/v1/kg/build/{job_id}/stream` | KG 빌드 진행률 SSE 스트림 |
+| `POST` | `/api/v1/query/stream` | Q&A 토큰 스트리밍 (SSE, mode b) |
+| `GET` | `/api/v1/ddl/examples` | 도메인 예제 스키마 목록 |
+| `GET` | `/api/v1/ddl/examples/{key}` | 도메인 예제 DDL + ERD 로드 |
+| `GET` | `/api/v1/llm-usage` | LLM 토큰 사용량 추적 |
 
 ---
 
@@ -261,8 +267,9 @@ GraphRAG/
 │   │   ├── query/                   # 질의 엔진
 │   │   │   ├── pipeline.py          # 쿼리 파이프라인
 │   │   │   ├── router.py            # 라우팅 (규칙 / LLM)
-│   │   │   ├── local_search.py      # Mode B 로컬 서치
-│   │   │   ├── template_registry.py # 쿼리 템플릿
+│   │   │   ├── local_search.py      # Mode B 로컬 서치 + SSE 스트리밍
+│   │   │   ├── template_registry.py # Cypher 템플릿 18종
+│   │   │   ├── wisdom_engine.py     # DIKW Wisdom 레이어
 │   │   │   └── demo_cache.py        # 데모 질문 캐시
 │   │   ├── evaluation/              # A/B 평가
 │   │   ├── csv_import/              # CSV 임포트
@@ -270,7 +277,7 @@ GraphRAG/
 │   │   │   ├── neo4j_client.py      # Neo4j 드라이버 싱글턴
 │   │   │   ├── pg_client.py         # PostgreSQL CRUD
 │   │   │   └── kg_build_store.py    # KG 빌드 상태 저장
-│   │   └── routers/                 # API 라우터
+│   │   └── routers/                 # API 라우터 (REST + SSE)
 │   ├── tests/                       # pytest 테스트
 │   └── Dockerfile
 ├── frontend/
@@ -282,13 +289,14 @@ GraphRAG/
 │   │   │   ├── radial/              # D3.js 방사형 그래프 (Radial 뷰)
 │   │   │   └── review/              # 리뷰 페이지 컴포넌트
 │   │   ├── hooks/                   # 커스텀 훅 (use-radial-data 등)
-│   │   ├── api/client.ts            # API 클라이언트
+│   │   ├── api/client.ts            # REST API 클라이언트
+│   │   ├── api/sse.ts               # SSE 스트리밍 클라이언트
 │   │   ├── constants.ts             # 공통 상수
 │   │   └── App.tsx                  # 앱 라우팅
 │   ├── Dockerfile
 │   └── nginx.conf
 ├── examples/
-│   ├── schemas/                     # 데모 DDL (ecommerce, accounting)
+│   ├── schemas/                     # 데모 DDL (ecommerce, accounting, hr, hospital)
 │   └── data/                        # 샘플 CSV 데이터
 ├── docs/                            # 프로젝트 문서
 ├── docker-compose.yml

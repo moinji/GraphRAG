@@ -21,23 +21,29 @@ from app.exceptions import (
     CypherExecutionError,
     DDLParseError,
     FileTooLargeError,
+    LLMEnrichmentError,
     LocalSearchError,
+    MappingValidationError,
     OntologyGenerationError,
     QueryRoutingError,
     VersionConflictError,
     VersionNotFoundError,
+    WisdomError,
     build_job_not_found_handler,
     csv_validation_error_handler,
     cypher_execution_error_handler,
     ddl_parse_error_handler,
     file_too_large_handler,
+    llm_enrichment_error_handler,
     local_search_error_handler,
+    mapping_validation_error_handler,
     ontology_generation_error_handler,
     query_routing_error_handler,
     version_conflict_handler,
     version_not_found_handler,
+    wisdom_error_handler,
 )
-from app.routers import csv_upload, ddl, evaluation, graph, health, kg_build, ontology, ontology_versions, query, sse, wisdom
+from app.routers import csv_upload, ddl, evaluation, graph, health, kg_build, mapping, ontology, ontology_versions, query, sse, wisdom
 
 logger = logging.getLogger(__name__)
 
@@ -77,8 +83,11 @@ def create_app() -> FastAPI:
     application.add_exception_handler(BuildJobNotFoundError, build_job_not_found_handler)
     application.add_exception_handler(QueryRoutingError, query_routing_error_handler)
     application.add_exception_handler(CypherExecutionError, cypher_execution_error_handler)
+    application.add_exception_handler(LLMEnrichmentError, llm_enrichment_error_handler)
     application.add_exception_handler(LocalSearchError, local_search_error_handler)
     application.add_exception_handler(CSVValidationError, csv_validation_error_handler)
+    application.add_exception_handler(MappingValidationError, mapping_validation_error_handler)
+    application.add_exception_handler(WisdomError, wisdom_error_handler)
 
     # Routers
     application.include_router(health.router)
@@ -90,6 +99,7 @@ def create_app() -> FastAPI:
     application.include_router(evaluation.router)
     application.include_router(csv_upload.router)
     application.include_router(graph.router)
+    application.include_router(mapping.router)
     application.include_router(wisdom.router)
     application.include_router(sse.router)
 

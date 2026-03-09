@@ -148,6 +148,24 @@ async def csv_validation_error_handler(
     )
 
 
+class MappingValidationError(Exception):
+    """Raised when YAML mapping validation fails."""
+
+    def __init__(self, detail: str = "Mapping validation failed", errors: list[str] | None = None):
+        self.detail = detail
+        self.errors = errors or []
+        super().__init__(detail)
+
+
+async def mapping_validation_error_handler(
+    _request: Request, exc: MappingValidationError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.detail, "errors": exc.errors},
+    )
+
+
 class LocalSearchError(Exception):
     """Raised when B안 local search fails."""
 
@@ -158,5 +176,19 @@ class LocalSearchError(Exception):
 
 async def local_search_error_handler(
     _request: Request, exc: LocalSearchError
+) -> JSONResponse:
+    return JSONResponse(status_code=502, content={"detail": exc.detail})
+
+
+class WisdomError(Exception):
+    """Raised when DIKW wisdom analysis fails."""
+
+    def __init__(self, detail: str = "Wisdom analysis failed"):
+        self.detail = detail
+        super().__init__(detail)
+
+
+async def wisdom_error_handler(
+    _request: Request, exc: WisdomError
 ) -> JSONResponse:
     return JSONResponse(status_code=502, content={"detail": exc.detail})
