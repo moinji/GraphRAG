@@ -93,12 +93,14 @@ export default function GraphCanvas({
     }
   }, [matchedNodeIds, cyRef]);
 
-  // Highlight query-related nodes
+  // Highlight query-related nodes + connecting edges
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy) return;
 
     cy.nodes().removeClass('query-highlight');
+    cy.edges().removeClass('query-highlight-edge');
+
     if (highlightNodeIds.size > 0) {
       for (const id of highlightNodeIds) {
         const node = cy.getElementById(id);
@@ -106,6 +108,20 @@ export default function GraphCanvas({
           node.addClass('query-highlight');
         }
       }
+
+      // Highlight edges where BOTH endpoints are in the highlight set
+      cy.edges().forEach((edge) => {
+        const srcId = edge.source().id();
+        const tgtId = edge.target().id();
+        if (highlightNodeIds.has(srcId) && highlightNodeIds.has(tgtId)) {
+          edge.addClass('query-highlight-edge');
+        }
+      });
+
+      // Dim non-highlighted elements
+      cy.nodes().not('.query-highlight').addClass('query-dimmed');
+      cy.edges().not('.query-highlight-edge').addClass('query-dimmed-edge');
+
       // Fit view to all highlighted nodes
       const highlighted = cy.nodes('.query-highlight');
       if (highlighted.length > 0) {
@@ -114,6 +130,9 @@ export default function GraphCanvas({
           { duration: 500 },
         );
       }
+    } else {
+      cy.nodes().removeClass('query-dimmed');
+      cy.edges().removeClass('query-dimmed-edge');
     }
   }, [highlightNodeIds, cyRef]);
 
@@ -138,9 +157,32 @@ export default function GraphCanvas({
         'border-width': 4,
         'border-color': '#8b5cf6',
         'overlay-color': '#8b5cf6',
-        'overlay-opacity': 0.2,
+        'overlay-opacity': 0.25,
         width: 48,
         height: 48,
+        'z-index': 10,
+      },
+    },
+    {
+      selector: 'edge.query-highlight-edge',
+      style: {
+        width: 3,
+        'line-color': '#8b5cf6',
+        'target-arrow-color': '#8b5cf6',
+        'line-opacity': 1,
+        'z-index': 10,
+      },
+    },
+    {
+      selector: 'node.query-dimmed',
+      style: {
+        opacity: 0.2,
+      },
+    },
+    {
+      selector: 'edge.query-dimmed-edge',
+      style: {
+        opacity: 0.1,
       },
     },
   ];

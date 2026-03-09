@@ -108,6 +108,16 @@ export async function uploadDDL(file: File): Promise<ERDSchema> {
   });
 }
 
+/** List available domain example schemas. */
+export async function listDomainExamples(): Promise<{ key: string; name: string; description: string; table_count: number; fk_count: number }[]> {
+  return request(`${BASE}/ddl/examples`, { method: 'GET' });
+}
+
+/** Load a specific domain example schema with parsed ERD. */
+export async function loadDomainExample(key: string): Promise<{ key: string; name: string; ddl: string; erd: ERDSchema }> {
+  return request(`${BASE}/ddl/examples/${encodeURIComponent(key)}`, { method: 'GET' });
+}
+
 /** Generate ontology from an ERD schema. */
 export async function generateOntology(
   erd: ERDSchema,

@@ -17,6 +17,7 @@ interface RadialCanvasProps {
   onHover: (id: string | null) => void;
   onNavigate: (nodeId: string) => void;
   onSelect: (node: GraphNode) => void;
+  highlightNodeIds?: Set<string>;
 }
 
 interface SimNode extends d3.SimulationNodeDatum {
@@ -38,7 +39,7 @@ const OUTER_R = 18;
 const TRANSITION_MS = 500;
 
 const RadialCanvas = forwardRef<RadialCanvasHandle, RadialCanvasProps>(
-  function RadialCanvas({ nodes, edges, centerId, onHover, onNavigate, onSelect }, ref) {
+  function RadialCanvas({ nodes, edges, centerId, onHover, onNavigate, onSelect, highlightNodeIds }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const svgRef = useRef<SVGSVGElement | null>(null);
     const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
@@ -212,6 +213,14 @@ const RadialCanvas = forwardRef<RadialCanvasHandle, RadialCanvasProps>(
         .attr('stdDeviation', 3)
         .attr('flood-color', '#00000030');
 
+      // Glow filter for query highlights
+      const glowFilter = defs.append('filter').attr('id', 'query-glow');
+      glowFilter.append('feDropShadow')
+        .attr('dx', 0).attr('dy', 0)
+        .attr('stdDeviation', 6)
+        .attr('flood-color', '#8b5cf6')
+        .attr('flood-opacity', 0.7);
+
       // Node circles
       nodeGs
         .append('circle')
@@ -324,7 +333,41 @@ const RadialCanvas = forwardRef<RadialCanvasHandle, RadialCanvasProps>(
         .transition()
         .duration(TRANSITION_MS)
         .attr('opacity', 1);
-    }, [nodes, edges, centerId, onNavigate, onSelect, onHover]);
+
+      // --- Query highlight (persistent, not hover) ---
+      if (highlightNodeIds && highlightNodeIds.size > 0) {
+        // Compute highlighted edge IDs
+        const hlEdgeIds = new Set<string>();
+        for (const e of simEdges) {
+          const sid = typeof e.source === 'object' ? (e.source as SimNode).id : e.source;
+          const tid = typeof e.target === 'object' ? (e.target as SimNode).id : e.target;
+          if (highlightNodeIds.has(String(sid)) && highlightNodeIds.has(String(tid))) {
+            hlEdgeIds.add(e.id);
+          }
+        }
+
+        // Apply after fade-in completes
+        setTimeout(() => {
+          // Dim non-highlighted nodes
+          nodeGs.attr('opacity', (n) => (highlightNodeIds.has(n.id) ? 1 : 0.15));
+
+          // Glow ring on highlighted nodes
+          nodeGs.filter((n) => highlightNodeIds.has(n.id))
+            .select('circle')
+            .attr('stroke', '#8b5cf6')
+            .attr('stroke-width', 4)
+            .attr('filter', 'url(#query-glow)');
+
+          // Highlight edges
+          edgePaths
+            .attr('opacity', (e) => (hlEdgeIds.has(e.id) ? 1 : 0.08))
+            .attr('stroke', (e) => (hlEdgeIds.has(e.id) ? '#8b5cf6' : '#cbd5e1'))
+            .attr('stroke-width', (e) => (hlEdgeIds.has(e.id) ? 3 : 1.5));
+
+          edgeLabels.attr('opacity', (e) => (hlEdgeIds.has(e.id) ? 1 : 0.08));
+        }, TRANSITION_MS + 50);
+      }
+    }, [nodes, edges, centerId, onNavigate, onSelect, onHover, highlightNodeIds]);
 
 
     return <div ref={containerRef} className="w-full h-full" />;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { uploadDDL, generateOntology, approveVersion, startKGBuild, getKGBuildStatus, generateDDLFromNL } from '@/api/client';
+import { uploadDDL, generateOntology, approveVersion, startKGBuild, getKGBuildStatus, generateDDLFromNL, listDomainExamples, loadDomainExample } from '@/api/client';
 import { BUILD_POLL_INTERVAL_MS } from '@/constants';
 import type { ERDSchema, OntologyGenerateResponse } from '@/types/ontology';
 
@@ -33,6 +33,27 @@ export default function UploadPage({ onGenerated, onAutoComplete }: UploadPagePr
   const [nlInput, setNlInput] = useState('');
   const [nlGenerating, setNlGenerating] = useState(false);
   const [generatedDDL, setGeneratedDDL] = useState<string | null>(null);
+  const [examples, setExamples] = useState<{ key: string; name: string; description: string; table_count: number; fk_count: number }[]>([]);
+  const [exampleLoading, setExampleLoading] = useState<string | null>(null);
+
+  useEffect(() => {
+    listDomainExamples().then(setExamples).catch(() => {});
+  }, []);
+
+  async function handleLoadExample(key: string) {
+    setExampleLoading(key);
+    setError(null);
+    try {
+      const result = await loadDomainExample(key);
+      setErd(result.erd);
+      setGeneratedDDL(result.ddl);
+      setExpandedTable(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load example');
+    } finally {
+      setExampleLoading(null);
+    }
+  }
 
   // FK lookup: target_table → source entries
   const fkBySource = new Map<string, { source_column: string; target_table: string; target_column: string }[]>();
@@ -185,6 +206,42 @@ export default function UploadPage({ onGenerated, onAutoComplete }: UploadPagePr
           </Button>
         </CardContent>
       </Card>
+
+      {/* Domain examples */}
+      {examples.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">예제 스키마 (Demo Domains)</CardTitle>
+            <CardDescription>
+              4개 도메인 예제 중 하나를 선택하면 즉시 파싱됩니다.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-3">
+              {examples.map((ex) => (
+                <button
+                  key={ex.key}
+                  onClick={() => handleLoadExample(ex.key)}
+                  disabled={exampleLoading !== null}
+                  className="rounded-lg border p-3 text-left hover:bg-accent hover:border-primary/30 transition-colors disabled:opacity-50"
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-medium text-sm">{ex.name}</span>
+                    {exampleLoading === ex.key && (
+                      <span className="animate-spin inline-block size-3 border-2 border-current border-t-transparent rounded-full" />
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">{ex.description}</p>
+                  <div className="flex gap-2 mt-2">
+                    <Badge variant="outline" className="text-[10px]">{ex.table_count} tables</Badge>
+                    <Badge variant="outline" className="text-[10px]">{ex.fk_count} FKs</Badge>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* NL → DDL */}
       <Card>

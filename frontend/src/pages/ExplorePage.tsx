@@ -329,6 +329,11 @@ export default function ExplorePage({ onBack }: ExplorePageProps) {
           expandNode={expandNode}
           selectedNode={selectedNode}
           setSelectedNode={setSelectedNode}
+          highlightNodeIds={highlightNodeIds}
+          demoAnswer={demoAnswer}
+          onDemoQuestion={handleDemoQuestion}
+          demoQueryLoading={demoQueryLoading}
+          onClearDemo={handleClearDemo}
         />
       )}
     </div>
