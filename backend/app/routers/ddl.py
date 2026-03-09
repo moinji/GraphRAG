@@ -23,6 +23,8 @@ _EXAMPLES_DIR = Path(__file__).resolve().parent.parent.parent.parent / "examples
 
 _DOMAIN_EXAMPLES = [
     {"key": "ecommerce", "file": "demo_ecommerce.sql", "name": "E-Commerce", "description": "고객, 상품, 주문, 리뷰, 카테고리, 배송 (12 tables)"},
+    {"key": "education", "file": "demo_education.sql", "name": "교육 (Education)", "description": "학생, 수강, 과목, 교수, 학과, 성적, 수료증 (11 tables)"},
+    {"key": "insurance", "file": "demo_insurance.sql", "name": "보험 (Insurance)", "description": "계약자, 보험증권, 보장, 청구, 정산, 보험료 (12 tables)"},
     {"key": "accounting", "file": "demo_accounting.sql", "name": "회계 (Accounting)", "description": "계정과목, 전표, 분개, 예산, 부서, 거래처 (10 tables)"},
     {"key": "hr", "file": "demo_hr.sql", "name": "인사 (HR)", "description": "직원, 부서, 프로젝트, 스킬, 출결, 평가 (11 tables)"},
     {"key": "hospital", "file": "demo_hospital.sql", "name": "병원 (Hospital)", "description": "환자, 의사, 진료, 처방, 검사, 입원 (11 tables)"},
