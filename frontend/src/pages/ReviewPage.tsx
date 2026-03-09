@@ -12,7 +12,7 @@ import EditNodeDialog from '@/components/review/EditNodeDialog';
 import EditRelationshipDialog from '@/components/review/EditRelationshipDialog';
 import CSVUploadSection from '@/components/review/CSVUploadSection';
 import BuildKGActions from '@/components/review/BuildKGActions';
-import { updateVersion, approveVersion, startKGBuild, uploadCSVFiles, resetGraph, APIError } from '@/api/client';
+import { updateVersion, approveVersion, startKGBuild, uploadCSVFiles, resetGraph, generateMapping, updateMapping, APIError } from '@/api/client';
 import { streamKGBuild } from '@/api/sse';
 import { SUCCESS_MSG_TIMEOUT_MS } from '@/constants';
 import type {
@@ -60,6 +60,13 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
   const [csvWarnings, setCsvWarnings] = useState<string[]>([]);
   const [csvUploading, setCsvUploading] = useState(false);
   const csvInputRef = useRef<HTMLInputElement>(null);
+
+  // Mapping state
+  const [yamlContent, setYamlContent] = useState<string | null>(null);
+  const [yamlLoading, setYamlLoading] = useState(false);
+  const [yamlEditing, setYamlEditing] = useState(false);
+  const [yamlDraft, setYamlDraft] = useState('');
+  const [mappingWarnings, setMappingWarnings] = useState<string[]>([]);
 
   const locked = status === 'approved';
   const versionId = result.version_id;
@@ -204,6 +211,45 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
     }
   }
 
+  // ── YAML Mapping ────────────────────────────────────────────────
+
+  async function handleGenerateMapping() {
+    if (!versionId) return;
+    setYamlLoading(true);
+    setMappingWarnings([]);
+    try {
+      const resp = await generateMapping(versionId);
+      setYamlContent(resp.yaml_content);
+      setYamlDraft(resp.yaml_content);
+      if (resp.validation_warnings.length > 0) {
+        setMappingWarnings(resp.validation_warnings);
+      }
+      showSuccess(`Mapping generated: ${resp.triples_map_count} nodes, ${resp.relationship_map_count} relationships`);
+    } catch (e) {
+      showError(e instanceof Error ? e.message : 'Mapping generation failed');
+    } finally {
+      setYamlLoading(false);
+    }
+  }
+
+  async function handleSaveMapping() {
+    if (!versionId) return;
+    setYamlLoading(true);
+    try {
+      const resp = await updateMapping(versionId, yamlDraft);
+      setYamlContent(yamlDraft);
+      setYamlEditing(false);
+      if (resp.validation_warnings?.length > 0) {
+        setMappingWarnings(resp.validation_warnings);
+      }
+      showSuccess('Mapping saved');
+    } catch (e) {
+      showError(e instanceof Error ? e.message : 'Save mapping failed');
+    } finally {
+      setYamlLoading(false);
+    }
+  }
+
   // ── KG Build ────────────────────────────────────────────────────
 
   const stopPolling = useCallback(() => {
@@ -282,6 +328,25 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
           </Badge>
           {versionId && (
             <span className="text-sm text-muted-foreground">v{versionId}</span>
+          )}
+          {result.detected_domain && (
+            <Badge variant="outline" className="border-purple-400 text-purple-600">
+              {result.detected_domain}
+            </Badge>
+          )}
+          {result.quality_score != null && (
+            <Badge
+              variant="outline"
+              className={
+                result.quality_score >= 0.8
+                  ? 'border-green-500 text-green-600'
+                  : result.quality_score >= 0.5
+                    ? 'border-amber-500 text-amber-600'
+                    : 'border-red-500 text-red-600'
+              }
+            >
+              Quality {Math.round(result.quality_score * 100)}%
+            </Badge>
           )}
         </div>
         <ModeToggle mode={mode} onModeChange={setMode} disabled={locked} />
@@ -371,6 +436,7 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
             <TabsList>
               <TabsTrigger value="nodes">노드</TabsTrigger>
               <TabsTrigger value="relationships">관계</TabsTrigger>
+              <TabsTrigger value="mapping">매핑 (YAML)</TabsTrigger>
               <TabsTrigger value="changes">변경 사항</TabsTrigger>
             </TabsList>
 
@@ -393,6 +459,80 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
                 onReverse={handleReverseRel}
                 onAdd={() => setShowAddRel(true)}
               />
+            </TabsContent>
+
+            <TabsContent value="mapping" className="mt-4">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">YAML 매핑 (R2RML 호환)</CardTitle>
+                    <div className="flex gap-2">
+                      {!yamlContent ? (
+                        <Button
+                          onClick={handleGenerateMapping}
+                          disabled={yamlLoading || !locked}
+                          size="sm"
+                          variant="outline"
+                        >
+                          {yamlLoading ? '생성 중...' : '매핑 생성'}
+                        </Button>
+                      ) : (
+                        <>
+                          {yamlEditing ? (
+                            <>
+                              <Button onClick={handleSaveMapping} disabled={yamlLoading} size="sm">
+                                {yamlLoading ? '저장 중...' : '저장'}
+                              </Button>
+                              <Button
+                                onClick={() => { setYamlEditing(false); setYamlDraft(yamlContent); }}
+                                size="sm"
+                                variant="outline"
+                              >
+                                취소
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button onClick={() => setYamlEditing(true)} size="sm" variant="outline">
+                                편집
+                              </Button>
+                              <Button onClick={handleGenerateMapping} disabled={yamlLoading} size="sm" variant="ghost">
+                                재생성
+                              </Button>
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {!locked && (
+                    <p className="text-sm text-muted-foreground">
+                      온톨로지를 승인한 후 매핑을 생성할 수 있습니다.
+                    </p>
+                  )}
+                  {mappingWarnings.length > 0 && (
+                    <div className="mb-3 rounded-lg border border-amber-400 bg-amber-50 p-2 text-xs text-amber-800 space-y-1">
+                      {mappingWarnings.map((w, i) => <p key={i}>{w}</p>)}
+                    </div>
+                  )}
+                  {yamlContent && !yamlEditing && (
+                    <pre className="rounded-lg border bg-muted p-3 text-xs overflow-x-auto max-h-96 overflow-y-auto font-mono">
+                      {yamlContent}
+                    </pre>
+                  )}
+                  {yamlEditing && (
+                    <textarea
+                      value={yamlDraft}
+                      onChange={(e) => setYamlDraft(e.target.value)}
+                      className="w-full rounded-lg border p-3 text-xs font-mono bg-background resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                      rows={20}
+                      spellCheck={false}
+                    />
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
 
             <TabsContent value="changes" className="mt-4">

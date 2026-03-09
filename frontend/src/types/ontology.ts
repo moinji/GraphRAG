@@ -91,6 +91,8 @@ export interface OntologyGenerateResponse {
   version_id: number | null;
   stage: string;
   warnings: string[];
+  quality_score: number | null;
+  detected_domain: string | null;
 }
 
 // ── Version API ──────────────────────────────────────────────────
@@ -124,6 +126,25 @@ export interface KGBuildProgress {
   current_step: string;
   step_number: number;
   total_steps: number;
+  error_count: number;
+}
+
+// ── Mapping ──────────────────────────────────────────────────────
+
+export interface MappingGenerateResponse {
+  yaml_content: string;
+  triples_map_count: number;
+  relationship_map_count: number;
+  validation_warnings: string[];
+  version_id: number;
+}
+
+export interface MappingPreview {
+  version_id: number;
+  node_count: number;
+  relationship_count: number;
+  table_mappings: { table: string; node_label: string; property_count: number }[];
+  domain: string | null;
 }
 
 export interface KGBuildErrorDetail {

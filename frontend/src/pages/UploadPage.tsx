@@ -35,6 +35,7 @@ export default function UploadPage({ onGenerated, onAutoComplete }: UploadPagePr
   const [generatedDDL, setGeneratedDDL] = useState<string | null>(null);
   const [examples, setExamples] = useState<{ key: string; name: string; description: string; table_count: number; fk_count: number }[]>([]);
   const [exampleLoading, setExampleLoading] = useState<string | null>(null);
+  const [domain, setDomain] = useState<string>('');
 
   useEffect(() => {
     listDomainExamples().then(setExamples).catch(() => {});
@@ -84,7 +85,7 @@ export default function UploadPage({ onGenerated, onAutoComplete }: UploadPagePr
     setLoading(true);
     setError(null);
     try {
-      const result = await generateOntology(erd, !includeLlm);
+      const result = await generateOntology(erd, !includeLlm, domain || undefined);
       onGenerated(result, erd);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Generation failed');
@@ -478,13 +479,29 @@ export default function UploadPage({ onGenerated, onAutoComplete }: UploadPagePr
           {/* Generate action */}
           <Card>
             <CardContent className="pt-6 space-y-4">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="include-llm"
-                  checked={includeLlm}
-                  onCheckedChange={(checked) => setIncludeLlm(checked === true)}
-                />
-                <Label htmlFor="include-llm">LLM 보강 포함</Label>
+              <div className="flex items-center gap-6">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="include-llm"
+                    checked={includeLlm}
+                    onCheckedChange={(checked) => setIncludeLlm(checked === true)}
+                  />
+                  <Label htmlFor="include-llm">LLM 보강 포함</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="domain-select" className="text-sm whitespace-nowrap">도메인</Label>
+                  <select
+                    id="domain-select"
+                    value={domain}
+                    onChange={(e) => setDomain(e.target.value)}
+                    className="rounded-md border px-2 py-1 text-sm bg-background"
+                  >
+                    <option value="">자동 감지</option>
+                    <option value="ecommerce">E-Commerce</option>
+                    <option value="education">Education</option>
+                    <option value="insurance">Insurance</option>
+                  </select>
+                </div>
               </div>
 
               <div className="flex gap-3">

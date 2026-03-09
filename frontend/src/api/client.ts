@@ -2,6 +2,8 @@ import type {
   CSVUploadResponse,
   ERDSchema,
   KGBuildResponse,
+  MappingGenerateResponse,
+  MappingPreview,
   OntologyApproveResponse,
   OntologyGenerateResponse,
   OntologySpec,
@@ -122,13 +124,16 @@ export async function loadDomainExample(key: string): Promise<{ key: string; nam
 export async function generateOntology(
   erd: ERDSchema,
   skipLlm: boolean,
+  domain?: string,
 ): Promise<OntologyGenerateResponse> {
+  const payload: Record<string, unknown> = { erd, skip_llm: skipLlm };
+  if (domain) payload.domain = domain;
   return request<OntologyGenerateResponse>(
     `${BASE}/ontology/generate`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ erd, skip_llm: skipLlm }),
+      body: JSON.stringify(payload),
     },
     ['ontology'],
     LONG_TIMEOUT_MS,
@@ -266,6 +271,49 @@ export async function resetGraph(): Promise<GraphResetResponse> {
   return request<GraphResetResponse>(`${BASE}/graph/reset`, {
     method: 'DELETE',
   });
+}
+
+// ── Mapping API ──────────────────────────────────────────────────
+
+/** Generate YAML mapping from an approved ontology version. */
+export async function generateMapping(
+  versionId: number,
+): Promise<MappingGenerateResponse> {
+  return request<MappingGenerateResponse>(
+    `${BASE}/mapping/generate`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ version_id: versionId }),
+    },
+    ['yaml_content'],
+  );
+}
+
+/** Get stored YAML mapping for a version. */
+export async function getMapping(
+  versionId: number,
+): Promise<MappingGenerateResponse> {
+  return request<MappingGenerateResponse>(`${BASE}/mapping/${versionId}`);
+}
+
+/** Update YAML mapping for a version. */
+export async function updateMapping(
+  versionId: number,
+  yamlContent: string,
+): Promise<{ message: string; validation_warnings: string[] }> {
+  return request(`${BASE}/mapping/${versionId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ yaml_content: yamlContent }),
+  });
+}
+
+/** Get mapping preview summary. */
+export async function getMappingPreview(
+  versionId: number,
+): Promise<MappingPreview> {
+  return request<MappingPreview>(`${BASE}/mapping/${versionId}/preview`);
 }
 
 export async function generateDDLFromNL(
