@@ -268,42 +268,75 @@ def _execute_neo4j(cypher: str, params: dict | None = None) -> list[dict]:
 def generate_answer_with_llm(
     question: str, subgraph_text: str
 ) -> tuple[str, list[str], int]:
-    """Call OpenAI API to generate answer from subgraph context.
+    """Call LLM to generate answer from subgraph context.
 
+    Tries OpenAI first, falls back to Anthropic.
     Returns (answer, paths, tokens_used).
     """
-    try:
-        from openai import OpenAI
+    messages = build_local_search_messages(question, subgraph_text)
 
-        client = OpenAI(api_key=settings.openai_api_key)
-        messages = build_local_search_messages(question, subgraph_text)
+    # Try OpenAI first
+    if settings.openai_api_key:
+        try:
+            from openai import OpenAI
 
-        response = client.chat.completions.create(
-            model=settings.local_search_model,
-            max_tokens=settings.local_search_max_tokens,
-            temperature=0,
-            messages=[{"role": "system", "content": LOCAL_SEARCH_SYSTEM_PROMPT}] + messages,
-        )
+            client = OpenAI(api_key=settings.openai_api_key)
+            response = client.chat.completions.create(
+                model=settings.local_search_model,
+                max_tokens=settings.local_search_max_tokens,
+                temperature=0,
+                messages=[{"role": "system", "content": LOCAL_SEARCH_SYSTEM_PROMPT}] + messages,
+            )
 
-        raw_text = response.choices[0].message.content
-        tokens_used = (
-            response.usage.prompt_tokens + response.usage.completion_tokens
-        )
+            raw_text = response.choices[0].message.content
+            tokens_used = (
+                response.usage.prompt_tokens + response.usage.completion_tokens
+            )
 
-        # Track token usage
-        from app.llm_tracker import tracker
-        tracker.record(
-            caller="local_search",
-            model=settings.local_search_model,
-            input_tokens=response.usage.prompt_tokens,
-            output_tokens=response.usage.completion_tokens,
-        )
+            from app.llm_tracker import tracker
+            tracker.record(
+                caller="local_search",
+                model=settings.local_search_model,
+                input_tokens=response.usage.prompt_tokens,
+                output_tokens=response.usage.completion_tokens,
+            )
 
-        answer, paths = parse_local_answer(raw_text)
-        return answer, paths, tokens_used
+            answer, paths = parse_local_answer(raw_text)
+            return answer, paths, tokens_used
+        except Exception as e:
+            logger.warning("OpenAI local search failed, trying Anthropic: %s", e)
 
-    except Exception as e:
-        raise LocalSearchError(f"LLM answer generation failed: {e}")
+    # Fallback to Anthropic
+    if settings.anthropic_api_key:
+        try:
+            import anthropic
+
+            client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+            response = client.messages.create(
+                model=settings.anthropic_model,
+                max_tokens=settings.local_search_max_tokens,
+                temperature=0,
+                system=LOCAL_SEARCH_SYSTEM_PROMPT,
+                messages=messages,
+            )
+
+            raw_text = response.content[0].text if response.content else ""
+            tokens_used = response.usage.input_tokens + response.usage.output_tokens
+
+            from app.llm_tracker import tracker
+            tracker.record(
+                caller="local_search",
+                model=settings.anthropic_model,
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+            )
+
+            answer, paths = parse_local_answer(raw_text)
+            return answer, paths, tokens_used
+        except Exception as e:
+            raise LocalSearchError(f"LLM answer generation failed: {e}")
+
+    raise LocalSearchError("No LLM API key configured for local search")
 
 
 def run_local_query(

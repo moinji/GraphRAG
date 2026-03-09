@@ -27,7 +27,7 @@ def route_question(question: str) -> HybridResult:
         return (tid, route, slots, params, "rule")
 
     # Stage 2: LLM fallback
-    if settings.openai_api_key:
+    if settings.openai_api_key or settings.anthropic_api_key:
         result = classify_by_llm(question)
         if result is not None:
             tid, route, slots, params = result

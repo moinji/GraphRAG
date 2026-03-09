@@ -24,7 +24,7 @@ AGG_KEYWORDS = re.compile(
 
 # Q1: "X가 주문한 상품" / "What products did X order?"
 _Q1_RE = re.compile(
-    r"(?:고객\s*)?(?P<name>\S+?)(?:가|이)\s*주문한\s*상품"
+    r"(?:고객\s*)?(?P<name>\S+?)(?:가|이)\s*(?:주문|구매)한\s*상품"
 )
 _Q1_EN = re.compile(
     r"(?:what\s+)?products?\s+(?:did|has)\s+(?P<name>\S+)\s+order",
@@ -73,12 +73,128 @@ _Q5_EN = re.compile(
     re.IGNORECASE,
 )
 
+# ── Extended patterns (Q6–Q12) ───────────────────────────────────
+
+# Q6: 3-hop "X가 주문한 상품의 카테고리/공급업체는?"
+_Q6_RE = re.compile(
+    r"(?:고객\s*)?(?P<name>\S+?)(?:가|이)\s*(?:주문|구매)한\s*상품(?:의|.*?)\s*(?P<target>카테고리|공급업체)",
+)
+_Q6_EN = re.compile(
+    r"(?:what\s+)?(?P<target>categor\w*|supplier\w*)\s+(?:of|for|in)\s+(?:products?\s+)?(?:ordered|bought|purchased)\s+by\s+(?P<name>\S+)"
+    r"|(?P<name2>\S+)(?:'s)?\s+order(?:ed)?\s+(?:products?\s+)?(?P<target2>categor\w*|supplier\w*)",
+    re.IGNORECASE,
+)
+
+# Q7: reverse 2-hop "X를 주문한 고객은?" / "Who ordered X?"
+_Q7_RE = re.compile(
+    r"(?P<product>\S+?)(?:를|을)\s*(?:주문|구매|산)한?\s*고객",
+)
+_Q7_EN = re.compile(
+    r"(?:who|which\s+customers?)\s+(?:ordered|bought|purchased)\s+(?P<product>\S+)"
+    r"|customers?\s+(?:who|that)\s+(?:ordered|bought|purchased)\s+(?P<product2>\S+)",
+    re.IGNORECASE,
+)
+
+# Q8: count all "총 X 수는?" / "How many customers/orders/products?"
+_ENTITY_LABEL_MAP_KO = {
+    "고객": "Customer", "주문": "Order", "상품": "Product",
+    "제품": "Product", "카테고리": "Category", "공급업체": "Supplier",
+}
+_ENTITY_LABEL_MAP_EN = {
+    "customer": "Customer", "customers": "Customer",
+    "order": "Order", "orders": "Order",
+    "product": "Product", "products": "Product",
+    "category": "Category", "categories": "Category",
+    "supplier": "Supplier", "suppliers": "Supplier",
+}
+_Q8_RE = re.compile(
+    r"총\s*(?P<entity>고객|주문|상품|제품|카테고리|공급업체)\s*수"
+    r"|(?P<entity2>고객|주문|상품|제품|카테고리|공급업체)(?:는|이|가)?\s*(?:총\s*)?몇\s*(?:명|개|건)",
+    re.IGNORECASE,
+)
+_Q8_EN = re.compile(
+    r"(?:how\s+many|total(?:\s+number\s+of)?)\s+(?P<entity>customers?|orders?|products?|categories|suppliers?)",
+    re.IGNORECASE,
+)
+
+# Q9: max/min "가장 비싼 상품은?" / "Most expensive product?"
+_Q9_RE = re.compile(
+    r"가장\s*(?P<adj>비싼|저렴한|싼|비싸다)\s*(?P<entity>상품|제품)",
+)
+_Q9_EN = re.compile(
+    r"(?:most|least)\s+(?P<adj>expensive|cheap(?:est)?)\s+(?P<entity>products?|items?)",
+    re.IGNORECASE,
+)
+
+# Q10: 1-hop relationship "X의 카테고리/공급업체/위시리스트/주소는?"
+_REL_MAP = {
+    "카테고리": ("Product", "BELONGS_TO", "Category", "name", "name"),
+    "공급업체": ("Product", "SUPPLIED_BY", "Supplier", "name", "name"),
+    "위시리스트": ("Customer", "WISHLISTED", "Product", "name", "name"),
+    "주소": ("Customer", "LIVES_AT", "Address", "name", "city"),
+    "상위 카테고리": ("Category", "CHILD_OF", "Category", "name", "name"),
+}
+_Q10_RE = re.compile(
+    r"(?P<entity>\S+?)(?:의|[은는])\s*(?P<rel>상위\s*카테고리|카테고리|공급업체|위시리스트(?:\s*(?:에\s*있는\s*)?상품)?|주소)",
+)
+_Q10_EN = re.compile(
+    r"(?:what(?:\s+is)?|show)\s+(?P<entity>\S+?)(?:'s)?\s+(?P<rel>category|supplier|wishlist|address)"
+    r"|(?P<rel2>category|supplier|wishlist|address)\s+(?:of|for)\s+(?P<entity2>\S+)",
+    re.IGNORECASE,
+)
+_REL_MAP_EN = {
+    "category": "카테고리",
+    "supplier": "공급업체",
+    "wishlist": "위시리스트",
+    "address": "주소",
+}
+
+# Q11: property lookup "X의 이메일/전화번호/가격/재고는?"
+_PROP_MAP = {
+    "이메일": ("Customer", "name", "email"),
+    "이메일 주소": ("Customer", "name", "email"),
+    "전화번호": ("Customer", "name", "phone"),
+    "전화": ("Customer", "name", "phone"),
+    "가격": ("Product", "name", "price"),
+    "재고": ("Product", "name", "stock"),
+    "재고 수량": ("Product", "name", "stock"),
+}
+_Q11_RE = re.compile(
+    r"(?P<entity>\S+?)(?:의|[은는])\s*(?P<prop>이메일\s*주소|이메일|전화번호|전화|가격|재고\s*수량|재고)",
+)
+_Q11_EN = re.compile(
+    r"(?:what(?:\s+is)?)\s+(?P<entity>\S+?)(?:'s)?\s+(?P<prop>email|phone|price|stock|inventory)"
+    r"|(?P<prop2>email|phone|price|stock|inventory)\s+(?:of|for)\s+(?P<entity2>\S+)",
+    re.IGNORECASE,
+)
+_PROP_MAP_EN = {
+    "email": "이메일",
+    "phone": "전화번호",
+    "price": "가격",
+    "stock": "재고",
+    "inventory": "재고",
+}
+
+# Q12: group count "고객별 주문 수는?" / "Orders per customer?"
+_GROUP_MAP = {
+    "고객": ("Customer", "PLACED", "Order", "name"),
+    "카테고리": ("Product", "BELONGS_TO", "Category", "name"),
+}
+_Q12_RE = re.compile(
+    r"(?P<group>고객|카테고리)별\s*(?P<target>주문|상품)\s*(?:수|건수|개수)",
+)
+_Q12_EN = re.compile(
+    r"(?P<target>orders?|products?)\s+(?:per|by|for\s+each)\s+(?P<group>customer|category)",
+    re.IGNORECASE,
+)
+
 
 def classify_by_rules(question: str) -> RouteResult | None:
     """Try to match question against rule patterns.
 
     Returns (template_id, route, slots, params) or None if no match.
     Checks both Korean and English patterns.
+    Order matters: more specific patterns are checked first.
     """
     # Q2 must be checked before Q1 (Q2 is a superset pattern)
     m = _Q2_RE.search(question)
@@ -93,6 +209,19 @@ def classify_by_rules(question: str) -> RouteResult | None:
             {},
             {"name": name, "limit": limit},
         )
+
+    # Q6: 3-hop (must be before Q1, since Q6 contains "주문한 상품")
+    m = _Q6_RE.search(question)
+    if m:
+        name = m.group("name")
+        target = m.group("target")
+        return _build_three_hop(name, target)
+    m = _Q6_EN.search(question)
+    if m:
+        name = m.group("name") or m.group("name2")
+        raw_target = m.group("target") or m.group("target2")
+        target = "카테고리" if raw_target.startswith("categor") else "공급업체"
+        return _build_three_hop(name, target)
 
     # Q4: common products purchased by two customers
     m = _Q4_RE.search(question)
@@ -114,6 +243,42 @@ def classify_by_rules(question: str) -> RouteResult | None:
             "cypher_traverse",
             {},
             {"name1": name1, "name2": name2},
+        )
+
+    # Q7: reverse 2-hop "X를 주문한 고객은?"
+    m = _Q7_RE.search(question)
+    if m:
+        product = m.group("product")
+        return (
+            "reverse_two_hop",
+            "cypher_traverse",
+            {
+                "end_label": "Customer",
+                "rel1": "PLACED",
+                "mid_label": "Order",
+                "rel2": "CONTAINS",
+                "start_label": "Product",
+                "start_prop": "name",
+                "return_prop": "name",
+            },
+            {"val": product},
+        )
+    m = _Q7_EN.search(question)
+    if m:
+        product = m.group("product") or m.group("product2")
+        return (
+            "reverse_two_hop",
+            "cypher_traverse",
+            {
+                "end_label": "Customer",
+                "rel1": "PLACED",
+                "mid_label": "Order",
+                "rel2": "CONTAINS",
+                "start_label": "Product",
+                "start_prop": "name",
+                "return_prop": "name",
+            },
+            {"val": product},
         )
 
     # Q1: two-hop customer→order→product
@@ -169,4 +334,195 @@ def classify_by_rules(question: str) -> RouteResult | None:
             {},
         )
 
+    # Q10: 1-hop relationship (before Q11 property, since some overlap)
+    m = _Q10_RE.search(question)
+    if m:
+        entity = m.group("entity")
+        rel_key = re.sub(r"\s+", " ", m.group("rel")).strip()
+        # Normalize: "위시리스트 상품" / "위시리스트에 있는 상품" → "위시리스트"
+        if "위시리스트" in rel_key:
+            rel_key = "위시리스트"
+        if rel_key in _REL_MAP:
+            return _build_one_hop(entity, rel_key)
+    m = _Q10_EN.search(question)
+    if m:
+        entity = m.group("entity") or m.group("entity2")
+        raw_rel = (m.group("rel") or m.group("rel2")).lower()
+        rel_key = _REL_MAP_EN.get(raw_rel)
+        if rel_key and rel_key in _REL_MAP:
+            return _build_one_hop(entity, rel_key)
+
+    # Q11: direct property lookup
+    m = _Q11_RE.search(question)
+    if m:
+        entity = m.group("entity")
+        prop_key = re.sub(r"\s+", " ", m.group("prop")).strip()
+        if prop_key in _PROP_MAP:
+            label, match_prop, return_prop = _PROP_MAP[prop_key]
+            return (
+                "property_lookup",
+                "cypher_traverse",
+                {"label": label, "match_prop": match_prop, "return_prop": return_prop},
+                {"val": entity},
+            )
+    m = _Q11_EN.search(question)
+    if m:
+        entity = m.group("entity") or m.group("entity2")
+        raw_prop = (m.group("prop") or m.group("prop2")).lower()
+        prop_key = _PROP_MAP_EN.get(raw_prop)
+        if prop_key and prop_key in _PROP_MAP:
+            label, match_prop, return_prop = _PROP_MAP[prop_key]
+            return (
+                "property_lookup",
+                "cypher_traverse",
+                {"label": label, "match_prop": match_prop, "return_prop": return_prop},
+                {"val": entity},
+            )
+
+    # Q9: max/min property
+    m = _Q9_RE.search(question)
+    if m:
+        return (
+            "max_prop",
+            "cypher_agg",
+            {"label": "Product", "return_prop": "name", "sort_prop": "price"},
+            {},
+        )
+    m = _Q9_EN.search(question)
+    if m:
+        return (
+            "max_prop",
+            "cypher_agg",
+            {"label": "Product", "return_prop": "name", "sort_prop": "price"},
+            {},
+        )
+
+    # Q8: count all
+    m = _Q8_RE.search(question)
+    if m:
+        raw_entity = m.group("entity") or m.group("entity2")
+        label = _ENTITY_LABEL_MAP_KO.get(raw_entity)
+        if label:
+            return (
+                "count_all",
+                "cypher_agg",
+                {"label": label},
+                {},
+            )
+    m = _Q8_EN.search(question)
+    if m:
+        raw_entity = m.group("entity").lower()
+        label = _ENTITY_LABEL_MAP_EN.get(raw_entity)
+        if label:
+            return (
+                "count_all",
+                "cypher_agg",
+                {"label": label},
+                {},
+            )
+
+    # Q12: group count
+    m = _Q12_RE.search(question)
+    if m:
+        group_key = m.group("group")
+        return _build_group_count_ko(group_key, m.group("target"))
+    m = _Q12_EN.search(question)
+    if m:
+        group_key = m.group("group").lower()
+        target = m.group("target").lower()
+        return _build_group_count_en(group_key, target)
+
     return None
+
+
+# ── Helper builders ──────────────────────────────────────────────
+
+def _build_three_hop(name: str, target: str) -> RouteResult:
+    """Build three_hop route for category or supplier."""
+    if target == "카테고리":
+        return (
+            "three_hop",
+            "cypher_traverse",
+            {
+                "start_label": "Customer",
+                "start_prop": "name",
+                "rel1": "PLACED",
+                "mid1_label": "Order",
+                "rel2": "CONTAINS",
+                "mid2_label": "Product",
+                "rel3": "BELONGS_TO",
+                "end_label": "Category",
+                "return_prop": "name",
+            },
+            {"val": name},
+        )
+    # 공급업체
+    return (
+        "three_hop",
+        "cypher_traverse",
+        {
+            "start_label": "Customer",
+            "start_prop": "name",
+            "rel1": "PLACED",
+            "mid1_label": "Order",
+            "rel2": "CONTAINS",
+            "mid2_label": "Product",
+            "rel3": "SUPPLIED_BY",
+            "end_label": "Supplier",
+            "return_prop": "name",
+        },
+        {"val": name},
+    )
+
+
+def _build_one_hop(entity: str, rel_key: str) -> RouteResult:
+    """Build one_hop_out route from relationship map."""
+    start_label, rel_type, end_label, start_prop, return_prop = _REL_MAP[rel_key]
+    return (
+        "one_hop_out",
+        "cypher_traverse",
+        {
+            "start_label": start_label,
+            "start_prop": start_prop,
+            "rel1": rel_type,
+            "end_label": end_label,
+            "return_prop": return_prop,
+        },
+        {"val": entity},
+    )
+
+
+def _build_group_count_ko(group_key: str, target: str) -> RouteResult:
+    """Build group_count route from Korean group key."""
+    if group_key == "고객":
+        return (
+            "group_count",
+            "cypher_agg",
+            {"start_label": "Customer", "rel1": "PLACED", "end_label": "Order", "group_prop": "name"},
+            {},
+        )
+    # 카테고리별 상품 수
+    return (
+        "top_n",
+        "cypher_agg",
+        {"start_label": "Product", "rel1": "BELONGS_TO", "end_label": "Category", "group_prop": "name"},
+        {"limit": 100},
+    )
+
+
+def _build_group_count_en(group_key: str, target: str) -> RouteResult:
+    """Build group_count route from English group key."""
+    if group_key == "customer":
+        return (
+            "group_count",
+            "cypher_agg",
+            {"start_label": "Customer", "rel1": "PLACED", "end_label": "Order", "group_prop": "name"},
+            {},
+        )
+    # category
+    return (
+        "top_n",
+        "cypher_agg",
+        {"start_label": "Product", "rel1": "BELONGS_TO", "end_label": "Category", "group_prop": "name"},
+        {"limit": 100},
+    )

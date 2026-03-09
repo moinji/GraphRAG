@@ -197,6 +197,34 @@ def _extract_paths(
             product = rec.get("product", "?")
             paths.append(f"Product({product})")
 
+    elif template_id == "property_lookup":
+        for rec in records:
+            val = rec.get("result", "?")
+            paths.append(f"{slots.get('label', '?')}({params.get('val', '?')}).{slots.get('return_prop', '?')} = {val}")
+
+    elif template_id == "reverse_two_hop":
+        name = params.get("val", "?")
+        for rec in records:
+            val = rec.get("result", "?")
+            paths.append(f"{slots.get('end_label', '?')}({val}) -> ... -> {slots.get('start_label', '?')}({name})")
+
+    elif template_id == "count_all":
+        for rec in records:
+            total = rec.get("total", "?")
+            paths.append(f"{slots.get('label', '?')}: {total}")
+
+    elif template_id == "group_count":
+        for rec in records:
+            cat = rec.get("category", "?")
+            cnt = rec.get("cnt", "?")
+            paths.append(f"{cat}: {cnt}")
+
+    elif template_id == "max_prop":
+        for rec in records:
+            name = rec.get("name", "?")
+            value = rec.get("value", "?")
+            paths.append(f"{name}: {value}")
+
     return paths
 
 
@@ -277,9 +305,11 @@ def _generate_answer(
 
     if template_id == "three_hop":
         items = [str(r.get("result", "")) for r in records]
+        name = params.get("val", "?")
+        end_label = slots.get("end_label", "항목")
         if ko:
-            return f"결과: {', '.join(items)}"
-        return f"Results: {', '.join(items)}"
+            return f"{name} 고객이 주문한 상품의 {end_label}: {', '.join(items)}"
+        return f"{end_label} for products ordered by {name}: {', '.join(items)}"
 
     if template_id == "common_neighbor":
         items = [str(r.get("result", "")) for r in records]
@@ -293,6 +323,48 @@ def _generate_answer(
             if ko:
                 return f"최단 경로: {' -> '.join(str(n) for n in path_nodes)}"
             return f"Shortest path: {' -> '.join(str(n) for n in path_nodes)}"
+
+    if template_id == "property_lookup":
+        val = str(records[0].get("result", ""))
+        entity = params.get("val", "?")
+        prop = slots.get("return_prop", "?")
+        if ko:
+            return f"{entity}의 {prop}: {val}"
+        return f"{entity}'s {prop}: {val}"
+
+    if template_id == "reverse_two_hop":
+        items = [str(r.get("result", "")) for r in records]
+        product = params.get("val", "?")
+        if ko:
+            return f"{product}을(를) 주문한 고객: {', '.join(items)}"
+        return f"Customers who ordered {product}: {', '.join(items)}"
+
+    if template_id == "count_all":
+        total = records[0].get("total", 0)
+        label = slots.get("label", "?")
+        if ko:
+            return f"총 {label} 수: {total}"
+        return f"Total {label} count: {total}"
+
+    if template_id == "group_count":
+        lines = []
+        for i, r in enumerate(records, 1):
+            cat = r.get("category", "?")
+            cnt = r.get("cnt", 0)
+            if ko:
+                lines.append(f"{cat}: {cnt}건")
+            else:
+                lines.append(f"{cat}: {cnt}")
+        if ko:
+            return f"그룹별 수: {', '.join(lines)}"
+        return f"Count by group: {', '.join(lines)}"
+
+    if template_id == "max_prop":
+        name = records[0].get("name", "?")
+        value = records[0].get("value", "?")
+        if ko:
+            return f"가장 높은 항목: {name} ({value})"
+        return f"Top item: {name} ({value})"
 
     # Fallback: generic answer
     if ko:
@@ -354,6 +426,32 @@ def _extract_related_node_ids(
     elif template_id == "custom_q5":
         # Aggregate query — no specific nodes
         return []
+
+    elif template_id == "reverse_two_hop":
+        start_label = slots.get("start_label", "")
+        end_label = slots.get("end_label", "")
+        anchor_val = str(params.get("val", ""))
+        result_vals = [str(r.get("result", "")) for r in records if r.get("result")]
+        if start_label and anchor_val:
+            lookups.append((start_label, "name", [anchor_val]))
+        if end_label and result_vals:
+            lookups.append((end_label, "name", result_vals))
+
+    elif template_id == "property_lookup":
+        label = slots.get("label", "")
+        anchor_val = str(params.get("val", ""))
+        if label and anchor_val:
+            lookups.append((label, "name", [anchor_val]))
+
+    elif template_id == "three_hop":
+        start_label = slots.get("start_label", "")
+        end_label = slots.get("end_label", "")
+        anchor_val = str(params.get("val", ""))
+        result_vals = [str(r.get("result", "")) for r in records if r.get("result")]
+        if start_label and anchor_val:
+            lookups.append((start_label, "name", [anchor_val]))
+        if end_label and result_vals:
+            lookups.append((end_label, "name", result_vals))
 
     else:
         return []

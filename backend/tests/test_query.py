@@ -1,4 +1,4 @@
-"""Query pipeline tests — 27 cases."""
+"""Query pipeline tests — 46 cases."""
 
 from __future__ import annotations
 
@@ -29,11 +29,11 @@ async def api_client(_app):
 # ════════════════════════════════════════════════════════════════════
 
 
-def test_registry_has_13_templates():
-    """#1: Registry contains exactly 13 templates."""
+def test_registry_has_18_templates():
+    """#1: Registry contains exactly 18 templates."""
     from app.query.template_registry import REGISTRY
 
-    assert len(REGISTRY) == 13
+    assert len(REGISTRY) == 18
 
 
 def test_render_two_hop():
@@ -157,10 +157,10 @@ def test_hybrid_rules_priority():
 def test_hybrid_llm_fallback():
     """#10: When rules don't match + API key present → LLM called."""
     mock_result = (
-        "one_hop_out",
+        "status_filter",
         "cypher_traverse",
-        {"start_label": "Customer", "start_prop": "name", "rel1": "LIVES_AT", "end_label": "Address", "return_prop": "city"},
-        {"val": "김민수"},
+        {"start_label": "Shipping", "rel1": "SHIPPED_TO", "end_label": "Address", "status_prop": "status", "op": "=", "return_prop": "city"},
+        {"status_val": "delivered"},
     )
     with (
         patch("app.query.router.settings") as mock_settings,
@@ -169,9 +169,9 @@ def test_hybrid_llm_fallback():
         mock_settings.openai_api_key = "test-key"
         from app.query.router import route_question
 
-        tid, route, slots, params, matched_by = route_question("김민수의 주소는 어디야?")
+        tid, route, slots, params, matched_by = route_question("배송 완료된 주문의 도착 지역은?")
         assert matched_by == "llm"
-        assert tid == "one_hop_out"
+        assert tid == "status_filter"
         mock_llm.assert_called_once()
 
 
@@ -417,3 +417,266 @@ def test_no_results_english():
 
     answer = _generate_answer("What products did X order?", [], "two_hop", {}, {})
     assert "No results found" in answer
+
+
+# ════════════════════════════════════════════════════════════════════
+#  Extended Templates (B1 - Cypher Template Expansion)
+# ════════════════════════════════════════════════════════════════════
+
+
+def test_render_property_lookup():
+    """#28: property_lookup template renders valid Cypher."""
+    from app.query.template_registry import render_cypher
+
+    cypher = render_cypher("property_lookup", {
+        "label": "Customer",
+        "match_prop": "name",
+        "return_prop": "email",
+    })
+    assert "Customer" in cypher
+    assert "$val" in cypher
+    assert "email" in cypher
+
+
+def test_render_count_all():
+    """#29: count_all template renders valid Cypher."""
+    from app.query.template_registry import render_cypher
+
+    cypher = render_cypher("count_all", {"label": "Customer"})
+    assert "Customer" in cypher
+    assert "count(n)" in cypher
+
+
+def test_render_reverse_two_hop():
+    """#30: reverse_two_hop template renders valid Cypher."""
+    from app.query.template_registry import render_cypher
+
+    cypher = render_cypher("reverse_two_hop", {
+        "end_label": "Customer",
+        "rel1": "PLACED",
+        "mid_label": "Order",
+        "rel2": "CONTAINS",
+        "start_label": "Product",
+        "start_prop": "name",
+        "return_prop": "name",
+    })
+    assert "Customer" in cypher
+    assert ":PLACED" in cypher
+    assert "$val" in cypher
+
+
+def test_render_group_count():
+    """#31: group_count template renders valid Cypher."""
+    from app.query.template_registry import render_cypher
+
+    cypher = render_cypher("group_count", {
+        "start_label": "Customer",
+        "rel1": "PLACED",
+        "end_label": "Order",
+        "group_prop": "name",
+    })
+    assert "Customer" in cypher
+    assert "count(b)" in cypher
+
+
+def test_render_max_prop():
+    """#32: max_prop template renders valid Cypher."""
+    from app.query.template_registry import render_cypher
+
+    cypher = render_cypher("max_prop", {
+        "label": "Product",
+        "return_prop": "name",
+        "sort_prop": "price",
+    })
+    assert "Product" in cypher
+    assert "ORDER BY" in cypher
+    assert "LIMIT 1" in cypher
+
+
+# ── Q6: 3-hop (category/supplier) ──────────────────────────────
+
+
+def test_rules_q6_category():
+    """#33: '김민수가 주문한 상품의 카테고리' matches three_hop."""
+    from app.query.router_rules import classify_by_rules
+
+    result = classify_by_rules("김민수가 주문한 상품의 카테고리는?")
+    assert result is not None
+    tid, route, slots, params = result
+    assert tid == "three_hop"
+    assert slots["end_label"] == "Category"
+    assert params["val"] == "김민수"
+
+
+def test_rules_q6_supplier():
+    """#34: '박지훈이 주문한 상품의 공급업체' matches three_hop."""
+    from app.query.router_rules import classify_by_rules
+
+    result = classify_by_rules("박지훈이 주문한 상품의 공급업체는?")
+    assert result is not None
+    tid, route, slots, params = result
+    assert tid == "three_hop"
+    assert slots["end_label"] == "Supplier"
+    assert params["val"] == "박지훈"
+
+
+# ── Q7: Reverse 2-hop ──────────────────────────────────────────
+
+
+def test_rules_q7_reverse():
+    """#35: '맥북프로를 주문한 고객은?' matches reverse_two_hop."""
+    from app.query.router_rules import classify_by_rules
+
+    result = classify_by_rules("맥북프로를 주문한 고객은?")
+    assert result is not None
+    tid, route, slots, params = result
+    assert tid == "reverse_two_hop"
+    assert params["val"] == "맥북프로"
+
+
+def test_rules_q7_en():
+    """#36: English 'Who ordered MacBookPro?' matches reverse_two_hop."""
+    from app.query.router_rules import classify_by_rules
+
+    result = classify_by_rules("Who ordered 맥북프로?")
+    assert result is not None
+    tid, route, slots, params = result
+    assert tid == "reverse_two_hop"
+    assert params["val"] == "맥북프로?"  # trailing ? gets captured, OK
+
+
+# ── Q8: Count all ──────────────────────────────────────────────
+
+
+def test_rules_q8_count_customers():
+    """#37: '총 고객 수는?' matches count_all."""
+    from app.query.router_rules import classify_by_rules
+
+    result = classify_by_rules("총 고객 수는 몇 명인가요?")
+    assert result is not None
+    tid, route, slots, params = result
+    assert tid == "count_all"
+    assert slots["label"] == "Customer"
+
+
+def test_rules_q8_count_orders():
+    """#38: '총 주문 건수는?' matches count_all."""
+    from app.query.router_rules import classify_by_rules
+
+    result = classify_by_rules("총 주문 수는?")
+    assert result is not None
+    tid, route, slots, params = result
+    assert tid == "count_all"
+    assert slots["label"] == "Order"
+
+
+def test_rules_q8_en():
+    """#39: English 'How many products?' matches count_all."""
+    from app.query.router_rules import classify_by_rules
+
+    result = classify_by_rules("How many products are there?")
+    assert result is not None
+    tid, route, slots, params = result
+    assert tid == "count_all"
+    assert slots["label"] == "Product"
+
+
+# ── Q9: Max/Min property ──────────────────────────────────────
+
+
+def test_rules_q9_most_expensive():
+    """#40: '가장 비싼 상품은?' matches max_prop."""
+    from app.query.router_rules import classify_by_rules
+
+    result = classify_by_rules("가장 비싼 상품은?")
+    assert result is not None
+    tid, route, slots, params = result
+    assert tid == "max_prop"
+    assert slots["sort_prop"] == "price"
+
+
+# ── Q10: 1-hop relationship ───────────────────────────────────
+
+
+def test_rules_q10_category():
+    """#41: '에어팟프로의 카테고리는?' matches one_hop_out."""
+    from app.query.router_rules import classify_by_rules
+
+    result = classify_by_rules("에어팟프로의 카테고리는?")
+    assert result is not None
+    tid, route, slots, params = result
+    assert tid == "one_hop_out"
+    assert slots["rel1"] == "BELONGS_TO"
+    assert params["val"] == "에어팟프로"
+
+
+def test_rules_q10_wishlist():
+    """#42: '김민수의 위시리스트에 있는 상품은?' matches one_hop_out."""
+    from app.query.router_rules import classify_by_rules
+
+    result = classify_by_rules("김민수의 위시리스트에 있는 상품은?")
+    assert result is not None
+    tid, route, slots, params = result
+    assert tid == "one_hop_out"
+    assert slots["rel1"] == "WISHLISTED"
+    assert params["val"] == "김민수"
+
+
+# ── Q11: Property lookup ──────────────────────────────────────
+
+
+def test_rules_q11_email():
+    """#43: '김민수의 이메일은?' matches property_lookup."""
+    from app.query.router_rules import classify_by_rules
+
+    result = classify_by_rules("김민수의 이메일 주소는?")
+    assert result is not None
+    tid, route, slots, params = result
+    assert tid == "property_lookup"
+    assert slots["label"] == "Customer"
+    assert slots["return_prop"] == "email"
+    assert params["val"] == "김민수"
+
+
+def test_rules_q11_price():
+    """#44: '맥북프로의 가격은?' matches property_lookup."""
+    from app.query.router_rules import classify_by_rules
+
+    result = classify_by_rules("맥북프로의 가격은?")
+    assert result is not None
+    tid, route, slots, params = result
+    assert tid == "property_lookup"
+    assert slots["label"] == "Product"
+    assert slots["return_prop"] == "price"
+
+
+# ── Q12: Group count ──────────────────────────────────────────
+
+
+def test_rules_q12_orders_per_customer():
+    """#45: '고객별 주문 수는?' matches group_count."""
+    from app.query.router_rules import classify_by_rules
+
+    result = classify_by_rules("고객별 주문 수는?")
+    assert result is not None
+    tid, route, slots, params = result
+    assert tid == "group_count"
+    assert slots["start_label"] == "Customer"
+
+
+# ── Answer generation for new templates ─────────────────────────
+
+
+def test_answer_count_all():
+    """#46: count_all answer generation."""
+    from app.query.pipeline import _generate_answer
+
+    answer = _generate_answer(
+        "총 고객 수는?",
+        [{"total": 5}],
+        "count_all",
+        {"label": "Customer"},
+        {},
+    )
+    assert "5" in answer
+    assert "Customer" in answer

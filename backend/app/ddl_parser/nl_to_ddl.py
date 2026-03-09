@@ -36,7 +36,10 @@ def generate_ddl_from_nl(description: str) -> str:
         RuntimeError: If LLM call fails.
     """
     if settings.openai_api_key:
-        return _call_openai(description)
+        try:
+            return _call_openai(description)
+        except Exception as e:
+            logger.warning("OpenAI NL→DDL failed, trying Anthropic fallback: %s", e)
     if settings.anthropic_api_key:
         return _call_anthropic(description)
     raise ValueError("No LLM API key configured (OPENAI_API_KEY or ANTHROPIC_API_KEY required)")

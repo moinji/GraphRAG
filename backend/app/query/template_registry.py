@@ -1,4 +1,4 @@
-"""Cypher template registry — 10 generic + 3 custom templates.
+"""Cypher template registry — 15 generic + 3 custom templates.
 
 Each template has named slots (e.g. {start_label}) for node labels / rel types,
 and $-prefixed Neo4j parameters (e.g. $val) for runtime values.
@@ -85,6 +85,34 @@ _STATUS_FILTER = """
 MATCH (a:{start_label})-[:{rel1}]->(b:{end_label})
 WHERE a.{status_prop} {op} $status_val
 RETURN DISTINCT b.{return_prop} AS result
+""".strip()
+
+_PROPERTY_LOOKUP = """
+MATCH (n:{label} {{{match_prop}: $val}})
+RETURN n.{return_prop} AS result
+""".strip()
+
+_REVERSE_TWO_HOP = """
+MATCH (c:{end_label})-[:{rel1}]->(b:{mid_label})-[:{rel2}]->(a:{start_label} {{{start_prop}: $val}})
+RETURN DISTINCT c.{return_prop} AS result
+""".strip()
+
+_COUNT_ALL = """
+MATCH (n:{label})
+RETURN count(n) AS total
+""".strip()
+
+_GROUP_COUNT = """
+MATCH (a:{start_label})-[:{rel1}]->(b:{end_label})
+RETURN a.{group_prop} AS category, count(b) AS cnt
+ORDER BY cnt DESC
+""".strip()
+
+_MAX_PROP = """
+MATCH (n:{label})
+RETURN n.{return_prop} AS name, n.{sort_prop} AS value
+ORDER BY n.{sort_prop} DESC
+LIMIT 1
 """.strip()
 
 # ── Custom templates (domain-specific) ───────────────────────────
@@ -216,6 +244,51 @@ REGISTRY: dict[str, TemplateSpec] = {
         slots=["start_label", "rel1", "end_label", "status_prop", "op", "return_prop"],
         params=["status_val"],
         example_question="배송완료된 주문의 상품은?",
+    ),
+    "property_lookup": TemplateSpec(
+        template_id="property_lookup",
+        category="traverse",
+        description="Direct property lookup on a single node",
+        cypher=_PROPERTY_LOOKUP,
+        slots=["label", "match_prop", "return_prop"],
+        params=["val"],
+        example_question="김민수의 이메일은?",
+    ),
+    "reverse_two_hop": TemplateSpec(
+        template_id="reverse_two_hop",
+        category="traverse",
+        description="Reverse 2-hop chain traversal",
+        cypher=_REVERSE_TWO_HOP,
+        slots=["end_label", "rel1", "mid_label", "rel2", "start_label", "start_prop", "return_prop"],
+        params=["val"],
+        example_question="맥북프로를 주문한 고객은?",
+    ),
+    "count_all": TemplateSpec(
+        template_id="count_all",
+        category="aggregate",
+        description="Count all nodes of a given type",
+        cypher=_COUNT_ALL,
+        slots=["label"],
+        params=[],
+        example_question="총 고객 수는 몇 명인가요?",
+    ),
+    "group_count": TemplateSpec(
+        template_id="group_count",
+        category="aggregate",
+        description="Count grouped by start node",
+        cypher=_GROUP_COUNT,
+        slots=["start_label", "rel1", "end_label", "group_prop"],
+        params=[],
+        example_question="고객별 주문 수는?",
+    ),
+    "max_prop": TemplateSpec(
+        template_id="max_prop",
+        category="aggregate",
+        description="Find node with max/min property value",
+        cypher=_MAX_PROP,
+        slots=["label", "return_prop", "sort_prop"],
+        params=[],
+        example_question="가장 비싼 상품은?",
     ),
     "custom_q2": TemplateSpec(
         template_id="custom_q2",

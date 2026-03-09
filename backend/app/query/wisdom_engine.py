@@ -86,46 +86,75 @@ def _generate_wisdom(
     collected_text: str,
 ) -> tuple[list[DIKWLayer], str, str, list[str], list[str], int]:
     """Call LLM and parse structured DIKW response."""
-    try:
-        from openai import OpenAI
+    messages = build_wisdom_messages(question, intent, collected_text)
 
-        client = OpenAI(api_key=settings.openai_api_key)
-        messages = build_wisdom_messages(question, intent, collected_text)
+    # Try OpenAI first
+    if settings.openai_api_key:
+        try:
+            from openai import OpenAI
 
-        response = client.chat.completions.create(
-            model=settings.wisdom_model,
-            max_tokens=settings.wisdom_max_tokens,
-            temperature=0,
-            messages=[
-                {"role": "system", "content": WISDOM_SYSTEM_PROMPT},
-                *messages,
-            ],
-        )
+            client = OpenAI(api_key=settings.openai_api_key)
+            response = client.chat.completions.create(
+                model=settings.wisdom_model,
+                max_tokens=settings.wisdom_max_tokens,
+                temperature=0,
+                messages=[
+                    {"role": "system", "content": WISDOM_SYSTEM_PROMPT},
+                    *messages,
+                ],
+            )
 
-        raw_text = response.choices[0].message.content or ""
-        tokens = (
-            (response.usage.prompt_tokens + response.usage.completion_tokens)
-            if response.usage
-            else 0
-        )
+            raw_text = response.choices[0].message.content or ""
+            tokens = (
+                (response.usage.prompt_tokens + response.usage.completion_tokens)
+                if response.usage
+                else 0
+            )
 
-        # Track token usage
-        if response.usage:
+            if response.usage:
+                from app.llm_tracker import tracker
+                tracker.record(
+                    caller="wisdom_engine",
+                    model=settings.wisdom_model,
+                    input_tokens=response.usage.prompt_tokens,
+                    output_tokens=response.usage.completion_tokens,
+                )
+
+            return _parse_wisdom_response(raw_text, tokens)
+        except Exception as e:
+            logger.warning("OpenAI wisdom failed, trying Anthropic: %s", e)
+
+    # Fallback to Anthropic
+    if settings.anthropic_api_key:
+        try:
+            import anthropic
+
+            client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+            response = client.messages.create(
+                model=settings.anthropic_model,
+                max_tokens=settings.wisdom_max_tokens,
+                temperature=0,
+                system=WISDOM_SYSTEM_PROMPT,
+                messages=messages,
+            )
+
+            raw_text = response.content[0].text if response.content else ""
+            tokens = response.usage.input_tokens + response.usage.output_tokens
+
             from app.llm_tracker import tracker
             tracker.record(
                 caller="wisdom_engine",
-                model=settings.wisdom_model,
-                input_tokens=response.usage.prompt_tokens,
-                output_tokens=response.usage.completion_tokens,
+                model=settings.anthropic_model,
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
             )
 
-        return _parse_wisdom_response(raw_text, tokens)
+            return _parse_wisdom_response(raw_text, tokens)
+        except Exception as e:
+            logger.warning("Anthropic wisdom also failed: %s", e)
+            raise LocalSearchError(f"Wisdom LLM generation failed: {e}")
 
-    except ImportError:
-        raise LocalSearchError("openai package not installed")
-    except Exception as e:
-        logger.warning("Wisdom LLM call failed: %s", e)
-        raise LocalSearchError(f"Wisdom LLM generation failed: {e}")
+    raise LocalSearchError("No LLM API key configured for wisdom engine")
 
 
 def _parse_wisdom_response(

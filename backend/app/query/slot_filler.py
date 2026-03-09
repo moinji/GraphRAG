@@ -18,7 +18,7 @@ _OP_WHITELIST = {"=", "<>", ">", "<", ">=", "<=", "CONTAINS", "STARTS WITH", "EN
 # Slot names that hold node labels
 _LABEL_SLOTS = {
     "start_label", "end_label", "mid_label",
-    "mid1_label", "mid2_label",
+    "mid1_label", "mid2_label", "label",
 }
 
 # Slot names that hold relationship types
@@ -28,6 +28,7 @@ _REL_SLOTS = {"rel1", "rel2", "rel3"}
 _PROP_SLOTS = {
     "start_prop", "end_prop", "return_prop",
     "group_prop", "filter_prop", "status_prop",
+    "match_prop", "sort_prop",
 }
 
 
