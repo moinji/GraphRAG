@@ -9,6 +9,17 @@ from httpx import ASGITransport, AsyncClient
 
 from app.main import create_app
 
+# ── Seed entity data for tests (simulates Neo4j-loaded entities) ──
+_SEED_ENTITIES: dict[str, set[str]] = {
+    "Customer": {"김민수", "이영희", "박지훈", "최수진", "정대현"},
+    "Product": {
+        "맥북프로", "에어팟프로", "갤럭시탭", "LG그램", "갤럭시버즈",
+        "아이패드에어", "맥북에어", "소니WH-1000XM5",
+    },
+    "Category": {"전자기기", "의류", "식품", "노트북", "오디오", "태블릿"},
+    "Supplier": {"애플코리아", "삼성전자", "LG전자"},
+}
+
 
 # ── Fixtures ──────────────────────────────────────────────────────
 
@@ -33,7 +44,8 @@ def test_entity_extraction_customer():
     """#1: Customer name extracted correctly."""
     from app.query.local_search import extract_entity
 
-    name, label = extract_entity("김민수가 주문한 상품은?")
+    with patch("app.query.local_search._load_entities_from_neo4j", return_value=_SEED_ENTITIES):
+        name, label = extract_entity("김민수가 주문한 상품은?")
     assert name == "김민수"
     assert label == "Customer"
 
@@ -42,7 +54,8 @@ def test_entity_extraction_product():
     """#2: Product name extracted correctly."""
     from app.query.local_search import extract_entity
 
-    name, label = extract_entity("맥북프로의 가격은?")
+    with patch("app.query.local_search._load_entities_from_neo4j", return_value=_SEED_ENTITIES):
+        name, label = extract_entity("맥북프로의 가격은?")
     assert name == "맥북프로"
     assert label == "Product"
 
@@ -51,7 +64,8 @@ def test_entity_extraction_category():
     """#3: Category name extracted correctly."""
     from app.query.local_search import extract_entity
 
-    name, label = extract_entity("노트북 카테고리의 상위 카테고리는?")
+    with patch("app.query.local_search._load_entities_from_neo4j", return_value=_SEED_ENTITIES):
+        name, label = extract_entity("노트북 카테고리의 상위 카테고리는?")
     assert name == "노트북"
     assert label == "Category"
 
@@ -60,7 +74,8 @@ def test_entity_extraction_no_match():
     """#4: Unknown question returns None."""
     from app.query.local_search import extract_entity
 
-    name, label = extract_entity("오늘 날씨 어때?")
+    with patch("app.query.local_search._load_entities_from_neo4j", return_value=_SEED_ENTITIES):
+        name, label = extract_entity("오늘 날씨 어때?")
     assert name is None
     assert label is None
 
@@ -162,6 +177,7 @@ def test_run_local_query_success():
     }]
 
     with (
+        patch("app.query.local_search._load_entities_from_neo4j", return_value=_SEED_ENTITIES),
         patch("app.query.local_search._execute_neo4j", return_value=mock_neo4j_result),
         patch(
             "app.query.local_search.generate_answer_with_llm",
@@ -179,7 +195,8 @@ def test_run_local_query_no_entity():
     """#12: No entity → unsupported with error field."""
     from app.query.local_search import run_local_query
 
-    result = run_local_query("오늘 날씨 어때?")
+    with patch("app.query.local_search._load_entities_from_neo4j", return_value=_SEED_ENTITIES):
+        result = run_local_query("오늘 날씨 어때?")
     assert result.mode == "b"
     assert result.error is not None
     assert result.route == "unsupported"
@@ -190,9 +207,12 @@ def test_run_local_query_neo4j_fail():
     from app.exceptions import LocalSearchError
     from app.query.local_search import run_local_query
 
-    with patch(
-        "app.query.local_search._execute_neo4j",
-        side_effect=LocalSearchError("Connection refused"),
+    with (
+        patch("app.query.local_search._load_entities_from_neo4j", return_value=_SEED_ENTITIES),
+        patch(
+            "app.query.local_search._execute_neo4j",
+            side_effect=LocalSearchError("Connection refused"),
+        ),
     ):
         with pytest.raises(LocalSearchError, match="Connection refused"):
             run_local_query("김민수가 주문한 상품은?")
@@ -211,6 +231,7 @@ def test_run_local_query_llm_fail():
     }]
 
     with (
+        patch("app.query.local_search._load_entities_from_neo4j", return_value=_SEED_ENTITIES),
         patch("app.query.local_search._execute_neo4j", return_value=mock_neo4j_result),
         patch(
             "app.query.local_search.generate_answer_with_llm",
@@ -237,6 +258,7 @@ async def test_api_mode_b(api_client: AsyncClient):
     }]
 
     with (
+        patch("app.query.local_search._load_entities_from_neo4j", return_value=_SEED_ENTITIES),
         patch("app.query.local_search._execute_neo4j", return_value=mock_neo4j_result),
         patch(
             "app.query.local_search.generate_answer_with_llm",

@@ -84,6 +84,7 @@ class OntologySpec(BaseModel):
 class OntologyGenerateRequest(BaseModel):
     erd: ERDSchema
     skip_llm: bool = False
+    domain: str | None = None  # explicit domain override (e.g. "ecommerce", "education", "insurance")
 
 
 class LLMEnrichmentDiff(BaseModel):
@@ -111,6 +112,8 @@ class OntologyGenerateResponse(BaseModel):
     version_id: int | None = None
     stage: str = "fk_only"
     warnings: list[str] = []
+    quality_score: float | None = None
+    detected_domain: str | None = None
 
 
 # ── Ontology Version API ──────────────────────────────────────────
@@ -139,12 +142,35 @@ class OntologyApproveResponse(BaseModel):
     status: str
 
 
+# ── Mapping ──────────────────────────────────────────────────────
+
+class MappingGenerateRequest(BaseModel):
+    version_id: int
+
+
+class MappingGenerateResponse(BaseModel):
+    yaml_content: str
+    triples_map_count: int
+    relationship_map_count: int
+    validation_warnings: list[str] = []
+    version_id: int
+
+
+class MappingPreview(BaseModel):
+    version_id: int
+    node_count: int
+    relationship_count: int
+    table_mappings: list[dict] = []  # [{table, node_label, property_count}]
+    domain: str | None = None
+
+
 # ── KG Build Job ──────────────────────────────────────────────────
 
 class KGBuildRequest(BaseModel):
     version_id: int
     erd: ERDSchema
     csv_session_id: str | None = None
+    use_mapping: bool = False  # if True, use YAML mapping for KG build
 
 
 class KGBuildProgress(BaseModel):
@@ -154,6 +180,7 @@ class KGBuildProgress(BaseModel):
     current_step: str = ""  # data_generation | fk_verification | neo4j_load | completed
     step_number: int = 0    # 1-4
     total_steps: int = 4
+    error_count: int = 0    # non-fatal errors during build (e.g. FK violations)
 
 
 class KGBuildErrorDetail(BaseModel):

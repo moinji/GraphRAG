@@ -17,13 +17,13 @@ logger = logging.getLogger(__name__)
 RouteResult = tuple[str, str, dict[str, str], dict[str, object]]
 
 _SYSTEM_PROMPT = """You are a query router for a Knowledge Graph Q&A system.
-Given a user question in Korean, select the best Cypher template and fill the slot values.
+Given a user question in Korean or English, select the best Cypher template and fill the slot values.
 
 Available templates:
 {templates}
 
-Your KG has these node types: Customer, Product, Order, Category, Review, Coupon, Supplier, Address, Shipping.
-Relationships: PLACED, CONTAINS, BELONGS_TO, REVIEWS, APPLIED, SUPPLIED_BY, LIVES_AT, SHIPPED_TO, WISHLISTED, HAS_SUBCATEGORY.
+Current graph schema:
+{schema}
 
 Respond ONLY with a JSON object:
 {{
@@ -162,8 +162,10 @@ def _call_router_llm(system_prompt: str, question: str) -> str | None:
     return None
 
 
-def classify_by_llm(question: str) -> RouteResult | None:
-    """Route a question using OpenAI.
+def classify_by_llm(
+    question: str, tenant_id: str | None = None,
+) -> RouteResult | None:
+    """Route a question using LLM with live graph schema.
 
     Returns (template_id, route, slots, params) or None on failure.
     Non-fatal: logs warnings instead of raising.
@@ -172,7 +174,14 @@ def classify_by_llm(question: str) -> RouteResult | None:
         logger.warning("LLM router skipped: no API key")
         return None
 
-    system_prompt = _SYSTEM_PROMPT.format(templates=list_templates_for_prompt())
+    from app.db.graph_schema import format_schema_for_prompt, get_graph_schema
+
+    schema = get_graph_schema(tenant_id)
+    schema_text = format_schema_for_prompt(schema)
+    system_prompt = _SYSTEM_PROMPT.format(
+        templates=list_templates_for_prompt(),
+        schema=schema_text,
+    )
     raw_text = _call_router_llm(system_prompt, question)
     if raw_text is None:
         return None

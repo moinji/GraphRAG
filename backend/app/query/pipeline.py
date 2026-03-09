@@ -47,8 +47,8 @@ def run_query(
             return cached
 
     # A안: template-based pipeline
-    # 1. Route
-    template_id, route, slots, params, matched_by = route_question(question)
+    # 1. Route (pass tenant_id for schema-aware LLM fallback)
+    template_id, route, slots, params, matched_by = route_question(question, tenant_id=tenant_id)
 
     # Unsupported → early return
     if route == "unsupported":

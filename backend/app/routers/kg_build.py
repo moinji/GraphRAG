@@ -47,6 +47,12 @@ def start_kg_build(
             raise BuildJobNotFoundError(body.csv_session_id)
         delete_session(body.csv_session_id)  # one-time consumption
 
+    # Resolve YAML mapping if requested
+    mapping_config = None
+    if body.use_mapping:
+        from app.mapping.generator import ontology_to_mapping
+        mapping_config = ontology_to_mapping(ontology, version_id=body.version_id)
+
     # Generate job ID
     ts = int(time.time())
     rand = f"{random.randint(0, 0xFFFF):04x}"
@@ -58,7 +64,7 @@ def start_kg_build(
     # Schedule background task
     background_tasks.add_task(
         run_kg_build, job_id, body.version_id, body.erd, ontology, csv_data,
-        tenant_id,
+        tenant_id, mapping_config,
     )
 
     return job

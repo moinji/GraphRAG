@@ -15,6 +15,13 @@ the ontology by:
 3. Adding useful properties that the rule engine may have missed.
 4. Fixing any obvious direction errors.
 
+QUALITY RULES (based on Protégé ontology best practices):
+- No circular references between classes (self-referential like PARENT_OF is OK).
+- No duplicate class names (case-insensitive).
+- All relationship source/target nodes must reference existing node types.
+- Node types must be PascalCase, relationship types must be UPPER_SNAKE_CASE.
+- Avoid over-segmentation: do not create too many fine-grained node types.
+
 RULES:
 - Do NOT remove any existing FK-derived nodes or relationships.
 - Mark every NEW item you add with "derivation": "llm_suggested".
@@ -45,16 +52,10 @@ OUTPUT FORMAT (strict JSON, no markdown):
 }
 """
 
-ECOMMERCE_DOMAIN_HINT = """\
-Domain: E-commerce.
-Common patterns to consider:
-- Customers who buy similar products (collaborative filtering edges)
-- Product bundles / frequently-bought-together
-- Category hierarchy traversal
-- Supplier → Product → Review sentiment aggregation
-- Order lifecycle status edges (PENDING → SHIPPED → DELIVERED)
-
-Only add relationships that are genuinely useful for graph queries. \
+GENERIC_DOMAIN_HINT = """\
+Domain: Unknown / Generic.
+Analyze the table names, column names, and FK relationships to infer the domain.
+Only add relationships that are genuinely useful for graph queries.
 Do not add speculative edges without clear query value.
 """
 
@@ -62,14 +63,17 @@ Do not add speculative edges without clear query value.
 def build_enrichment_prompt(
     baseline: dict[str, Any],
     erd: dict[str, Any],
+    domain_hint_text: str | None = None,
 ) -> list[dict[str, str]]:
     """Assemble the messages list for the Claude API call."""
+    hint = domain_hint_text or GENERIC_DOMAIN_HINT
+
     user_content = (
         f"## Baseline Ontology (FK rules)\n```json\n"
         f"{_compact_json(baseline)}\n```\n\n"
         f"## Original ERD Schema\n```json\n"
         f"{_compact_json(erd)}\n```\n\n"
-        f"## Domain Hint\n{ECOMMERCE_DOMAIN_HINT}\n\n"
+        f"## Domain Hint\n{hint}\n\n"
         f"Return the enriched ontology as JSON."
     )
     return [

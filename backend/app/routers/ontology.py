@@ -19,4 +19,9 @@ def generate(body: OntologyGenerateRequest, request: Request) -> OntologyGenerat
     Stage 2: Claude LLM enrichment (skipped if skip_llm=true or no API key)
     """
     tenant_id = get_tenant_id(request)
-    return generate_ontology(erd=body.erd, skip_llm=body.skip_llm, tenant_id=tenant_id)
+    return generate_ontology(
+        erd=body.erd,
+        skip_llm=body.skip_llm,
+        tenant_id=tenant_id,
+        domain=body.domain,
+    )

@@ -69,8 +69,9 @@ def _call_llm_enricher(messages: list[dict]) -> str | None:
 def enrich_ontology(
     baseline: OntologySpec,
     erd_dict: dict[str, Any],
+    domain_hint_text: str | None = None,
 ) -> tuple[OntologySpec, list[LLMEnrichmentDiff]]:
-    """Call OpenAI to enrich the baseline ontology.
+    """Call LLM to enrich the baseline ontology.
 
     Returns:
         Tuple of (enriched OntologySpec, list of diffs).
@@ -82,7 +83,7 @@ def enrich_ontology(
         raise LLMEnrichmentError("No LLM API key configured (OPENAI_API_KEY or ANTHROPIC_API_KEY)")
 
     baseline_dict = baseline.model_dump()
-    messages = build_enrichment_prompt(baseline_dict, erd_dict)
+    messages = build_enrichment_prompt(baseline_dict, erd_dict, domain_hint_text)
 
     raw_text = _call_llm_enricher(messages)
 

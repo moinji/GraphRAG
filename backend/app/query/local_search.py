@@ -25,16 +25,8 @@ from app.query.local_prompts import (
 
 logger = logging.getLogger(__name__)
 
-# ── Fallback entities from seed data ────────────────────────────
-_FALLBACK_ENTITIES: dict[str, set[str]] = {
-    "Customer": {"김민수", "이영희", "박지훈", "최수진", "정대현"},
-    "Product": {
-        "맥북프로", "에어팟프로", "갤럭시탭", "LG그램", "갤럭시버즈",
-        "아이패드에어", "맥북에어", "소니WH-1000XM5",
-    },
-    "Category": {"전자기기", "의류", "식품", "노트북", "오디오", "태블릿"},
-    "Supplier": {"애플코리아", "삼성전자", "LG전자"},
-}
+# ── Fallback entities (empty — dynamic loading from Neo4j is primary) ──
+_FALLBACK_ENTITIES: dict[str, set[str]] = {}
 
 # Dynamic entity cache (populated from Neo4j), keyed by tenant_id
 _entity_cache: dict[str | None, dict[str, set[str]]] = {}
@@ -239,19 +231,65 @@ _AGGREGATE_QUESTION_MAP: list[tuple[re.Pattern, str]] = [
 def _select_aggregate_cypher(
     question: str, tenant_id: str | None = None,
 ) -> str | None:
-    """Select the best aggregate Cypher for a question."""
+    """Select the best aggregate Cypher for a question.
+
+    First tries hardcoded e-commerce patterns, then falls back to
+    a generic aggregate Cypher generated from the live graph schema.
+    """
     for pattern, key in _AGGREGATE_QUESTION_MAP:
         if pattern.search(question):
             cypher = _AGGREGATE_CYPHER_MAP.get(key)
             if cypher and tenant_id is not None:
+                from app.db.graph_schema import get_graph_schema
                 from app.tenant import prefix_cypher_labels
-                known = list(_FALLBACK_ENTITIES.keys()) + [
-                    "Order", "Product", "Category", "Customer", "Review",
-                    "Shipping", "Address", "Payment", "Coupon", "Supplier",
-                ]
+
+                schema = get_graph_schema(tenant_id)
+                known = schema.get("node_labels", [])
                 cypher = prefix_cypher_labels(cypher, tenant_id, known)
             return cypher
-    return None
+
+    # Generic fallback: build a simple aggregate from live graph schema
+    return _build_generic_aggregate(tenant_id)
+
+
+def _build_generic_aggregate(tenant_id: str | None = None) -> str | None:
+    """Generate a generic aggregate Cypher from the live graph schema.
+
+    Returns a simple node count grouped by label, or None if schema is empty.
+    """
+    from app.db.graph_schema import get_graph_schema
+
+    schema = get_graph_schema(tenant_id)
+    labels = schema.get("node_labels", [])
+    rel_types = schema.get("relationship_types", [])
+
+    if not labels:
+        return None
+
+    # Build a generic "count nodes by label, then count rels" query
+    if rel_types:
+        # Try to find a traversal to aggregate on
+        first_rel = rel_types[0]
+        cypher = (
+            f"MATCH (a)-[r:{first_rel}]->(b) "
+            f"RETURN labels(a)[0] AS source_type, labels(b)[0] AS target_type, "
+            f"count(r) AS count ORDER BY count DESC LIMIT 20"
+        )
+    else:
+        cypher = (
+            "MATCH (n) "
+            "RETURN labels(n)[0] AS label, count(n) AS count "
+            "ORDER BY count DESC LIMIT 20"
+        )
+
+    if tenant_id is not None:
+        from app.tenant import tenant_label_prefix
+        prefix = tenant_label_prefix(tenant_id)
+        if prefix:
+            # Labels in Cypher already use raw labels from Neo4j, no prefix needed
+            pass
+
+    return cypher
 
 
 def _execute_neo4j(cypher: str, params: dict | None = None) -> list[dict]:
@@ -353,12 +391,21 @@ def run_local_query(
     if entity_name is None and _is_aggregate_question(question):
         agg_cypher = _select_aggregate_cypher(question, tenant_id)
         if agg_cypher is None:
-            # Generic fallback
-            agg_cypher = _AGGREGATE_CYPHER_MAP["category_order_count"]
-            if tenant_id is not None:
-                from app.tenant import prefix_cypher_labels
-                known = ["Order", "Product", "Category", "Customer"]
-                agg_cypher = prefix_cypher_labels(agg_cypher, tenant_id, known)
+            # No matching pattern — return unsupported
+            latency_ms = int((time.time() - start_time) * 1000)
+            _ko = bool(re.search(r"[\uac00-\ud7a3]", question))
+            return QueryResponse(
+                question=question,
+                answer="이 질문 유형은 아직 지원하지 않습니다." if _ko else "This question type is not yet supported.",
+                cypher="",
+                paths=[],
+                template_id="",
+                route="unsupported",
+                matched_by="none",
+                mode="b",
+                error="No aggregate template matched",
+                latency_ms=latency_ms,
+            )
 
         records = _execute_neo4j(agg_cypher)
         subgraph_text = serialize_aggregate_results(records)
@@ -549,11 +596,14 @@ async def run_local_query_stream(
     if entity_name is None and _is_aggregate_question(question):
         agg_cypher = _select_aggregate_cypher(question, tenant_id)
         if agg_cypher is None:
-            agg_cypher = _AGGREGATE_CYPHER_MAP["category_order_count"]
-            if tenant_id is not None:
-                from app.tenant import prefix_cypher_labels
-                known = ["Order", "Product", "Category", "Customer"]
-                agg_cypher = prefix_cypher_labels(agg_cypher, tenant_id, known)
+            latency_ms = int((time.time() - start_time) * 1000)
+            _ko = bool(re.search(r"[\uac00-\ud7a3]", question))
+            yield {"_event": "complete", "question": question,
+                   "answer": "이 질문 유형은 아직 지원하지 않습니다." if _ko else "This question type is not yet supported.",
+                   "cypher": "", "paths": [], "template_id": "", "route": "unsupported",
+                   "matched_by": "none", "mode": "b", "error": "No aggregate template matched",
+                   "latency_ms": latency_ms}
+            return
 
         records = _execute_neo4j(agg_cypher)
         subgraph_text = serialize_aggregate_results(records)

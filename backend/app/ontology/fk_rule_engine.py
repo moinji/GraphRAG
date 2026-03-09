@@ -4,6 +4,8 @@ Two-layer approach:
 1. Domain hints (optional): known table→label, FK→relationship overrides.
 2. Auto-mapping (universal): PascalCase labels, auto join-table detection,
    auto-generated relationship names for any DDL.
+
+Domain hints are loaded from domain_hints.py and auto-detected from ERD.
 """
 
 from __future__ import annotations
@@ -20,65 +22,9 @@ from app.models.schemas import (
     RelationshipType,
     TableInfo,
 )
+from app.ontology.domain_hints import DomainHint, detect_domain
 
 logger = logging.getLogger(__name__)
-
-# ── Domain hints (e-commerce PoC) ──────────────────────────────────
-# These override auto-mapping for known tables. New domains can supply
-# their own hints or rely entirely on auto-mapping.
-
-TABLE_TO_LABEL: dict[str, str] = {
-    "addresses": "Address",
-    "categories": "Category",
-    "suppliers": "Supplier",
-    "coupons": "Coupon",
-    "customers": "Customer",
-    "products": "Product",
-    "orders": "Order",
-    "payments": "Payment",
-    "reviews": "Review",
-}
-
-# Tables that become *relationships* rather than nodes.
-JOIN_TABLE_CONFIG: dict[str, dict] = {
-    "order_items": {
-        "rel_name": "CONTAINS",
-        "source_fk_col": "order_id",
-        "target_fk_col": "product_id",
-        "property_columns": ["quantity", "unit_price"],
-    },
-    "wishlists": {
-        "rel_name": "WISHLISTED",
-        "source_fk_col": "customer_id",
-        "target_fk_col": "product_id",
-        "property_columns": [],
-    },
-    "shipping": {
-        "rel_name": "SHIPPED_TO",
-        "source_fk_col": "order_id",
-        "target_fk_col": "address_id",
-        "property_columns": ["carrier", "tracking_number", "status"],
-    },
-}
-
-# Direct FK → relationship mapping.
-# Key: (fk_source_table, fk_source_column)
-# Value: (source_node_label, rel_name, target_node_label,
-#         source_key_col_in_data, target_key_col_in_data)
-DIRECTION_MAP: dict[tuple[str, str], tuple[str, str, str, str, str]] = {
-    # FK-owning table IS the source node  (normal FK direction)
-    ("customers", "address_id"):  ("Customer", "LIVES_AT",    "Address",  "id", "address_id"),
-    ("products", "category_id"):  ("Product",  "BELONGS_TO",  "Category", "id", "category_id"),
-    ("products", "supplier_id"):  ("Product",  "SUPPLIED_BY", "Supplier", "id", "supplier_id"),
-    ("orders", "coupon_id"):      ("Order",    "USED_COUPON", "Coupon",   "id", "coupon_id"),
-    ("reviews", "product_id"):    ("Review",   "REVIEWS",     "Product",  "id", "product_id"),
-    # FK-owning table is the TARGET node  (flipped direction)
-    ("orders", "customer_id"):    ("Customer", "PLACED",      "Order",    "customer_id", "id"),
-    ("payments", "order_id"):     ("Order",    "PAID_BY",     "Payment",  "order_id", "id"),
-    ("reviews", "customer_id"):   ("Customer", "WROTE",       "Review",   "customer_id", "id"),
-    # Self-referential (parent → child)
-    ("categories", "parent_id"):  ("Category", "PARENT_OF",   "Category", "parent_id", "id"),
-}
 
 SQL_TYPE_MAP: dict[str, str] = {
     "SERIAL": "integer",
@@ -139,20 +85,21 @@ def _fk_columns_for_table(
 
 def _detect_join_tables(
     erd: ERDSchema,
+    hint_join_config: dict[str, dict],
 ) -> dict[str, dict]:
-    """Auto-detect join/bridge tables not covered by JOIN_TABLE_CONFIG.
+    """Auto-detect join/bridge tables not covered by domain hint config.
 
     A table is treated as a join table when:
     - It has exactly 2 FK columns
     - Every non-PK, non-FK column is a candidate relationship property
       (i.e., the table exists primarily to link two entities)
-    - It is not already in JOIN_TABLE_CONFIG
+    - It is not already in the hint config
 
-    Returns a dict matching JOIN_TABLE_CONFIG format.
+    Returns a dict matching join table config format.
     """
     detected: dict[str, dict] = {}
     for table in erd.tables:
-        if table.name in JOIN_TABLE_CONFIG:
+        if table.name in hint_join_config:
             continue
 
         fk_cols = _fk_columns_for_table(table.name, erd.foreign_keys)
@@ -196,24 +143,37 @@ def _detect_join_tables(
     return detected
 
 
-def build_ontology(erd: ERDSchema) -> OntologySpec:
+def build_ontology(
+    erd: ERDSchema,
+    domain_hint: DomainHint | None = None,
+) -> OntologySpec:
     """Convert ERDSchema → OntologySpec using FK rules + auto-detection.
 
-    Known tables use domain hints (hardcoded mappings).
+    If domain_hint is None, auto-detects the domain from ERD table names.
+    Known tables use domain hints (pluggable mappings).
     Unknown tables are auto-mapped: table_name → PascalCase node label,
     FK columns → auto-named relationships.
-    Join tables are auto-detected when not in JOIN_TABLE_CONFIG.
+    Join tables are auto-detected when not in the domain hint config.
     """
+    # Auto-detect domain if not explicitly provided
+    if domain_hint is None:
+        domain_hint = detect_domain(erd)
+
+    # Get domain-specific configs (empty if no domain matched)
+    table_to_label = domain_hint.table_to_label if domain_hint else {}
+    hint_join_config = domain_hint.join_table_config if domain_hint else {}
+    direction_map = domain_hint.direction_map if domain_hint else {}
+
     table_map = {t.name: t for t in erd.tables}
     node_types: list[NodeType] = []
     relationship_types: list[RelationshipType] = []
 
-    # Merge hardcoded + auto-detected join tables
-    all_join_config = dict(JOIN_TABLE_CONFIG)
-    all_join_config.update(_detect_join_tables(erd))
+    # Merge domain hint + auto-detected join tables
+    all_join_config = dict(hint_join_config)
+    all_join_config.update(_detect_join_tables(erd, hint_join_config))
 
-    # Build a unified label map: known tables + auto-mapped unknown tables
-    label_map: dict[str, str] = dict(TABLE_TO_LABEL)
+    # Build a unified label map: domain hints + auto-mapped unknown tables
+    label_map: dict[str, str] = dict(table_to_label)
     for table in erd.tables:
         if table.name not in label_map and table.name not in all_join_config:
             label_map[table.name] = _to_pascal_case(table.name)
@@ -248,9 +208,9 @@ def build_ontology(erd: ERDSchema) -> OntologySpec:
     for fk in erd.foreign_keys:
         key = (fk.source_table, fk.source_column)
 
-        # Try hardcoded mapping first
-        if key in DIRECTION_MAP:
-            src_label, rel_name, tgt_label, src_key, tgt_key = DIRECTION_MAP[key]
+        # Try domain hint mapping first
+        if key in direction_map:
+            src_label, rel_name, tgt_label, src_key, tgt_key = direction_map[key]
             relationship_types.append(RelationshipType(
                 name=rel_name,
                 source_node=src_label,

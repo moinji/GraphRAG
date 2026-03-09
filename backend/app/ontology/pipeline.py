@@ -1,7 +1,8 @@
-"""Two-stage ontology generation pipeline.
+"""Two-stage ontology generation pipeline with quality validation.
 
-Stage 1: FK rule engine (deterministic)
+Stage 1: FK rule engine (deterministic) with domain auto-detection
 Stage 2: Claude LLM enrichment (optional, non-fatal)
+Stage 3: Quality validation (Protégé-based criteria)
 """
 
 from __future__ import annotations
@@ -23,7 +24,9 @@ from app.models.schemas import (
     OntologyGenerateResponse,
     OntologySpec,
 )
+from app.ontology.domain_hints import DomainHint, detect_domain, get_domain_hint
 from app.ontology.fk_rule_engine import build_ontology
+from app.ontology.quality_checker import QualityReport, check_quality
 
 logger = logging.getLogger(__name__)
 
@@ -32,17 +35,27 @@ def generate_ontology(
     erd: ERDSchema,
     skip_llm: bool = False,
     tenant_id: str | None = None,
+    domain: str | None = None,
 ) -> OntologyGenerateResponse:
     """Run the full ontology generation pipeline.
 
-    1. Stage 1: FK rule engine → baseline ontology
-    2. Stage 2 (optional): Claude LLM enrichment
-    3. Evaluation against golden data
-    4. PG version storage (best-effort)
+    1. Domain detection (auto or explicit)
+    2. Stage 1: FK rule engine → baseline ontology
+    3. Stage 2 (optional): Claude LLM enrichment
+    4. Stage 3: Quality validation
+    5. Evaluation against golden data
+    6. PG version storage (best-effort)
     """
+    # ── Domain detection ───────────────────────────────────────────
+    domain_hint: DomainHint | None = None
+    if domain:
+        domain_hint = get_domain_hint(domain)
+    else:
+        domain_hint = detect_domain(erd)
+
     # ── Stage 1: FK rule engine ────────────────────────────────────
     try:
-        baseline = build_ontology(erd)
+        baseline = build_ontology(erd, domain_hint=domain_hint)
     except Exception as e:
         raise OntologyGenerationError(f"FK rule engine failed: {e}")
 
@@ -56,7 +69,8 @@ def generate_ontology(
             from app.ontology.llm_enricher import enrich_ontology
 
             erd_dict = erd.model_dump()
-            enriched, diffs = enrich_ontology(baseline, erd_dict)
+            hint_text = domain_hint.llm_prompt_hint if domain_hint else None
+            enriched, diffs = enrich_ontology(baseline, erd_dict, domain_hint_text=hint_text)
             final_ontology = enriched
             llm_diffs = diffs
             stage = "fk_plus_llm"
@@ -64,8 +78,22 @@ def generate_ontology(
             logger.warning("LLM enrichment skipped: %s", e.detail)
             # Keep baseline, stage stays "fk_only"
 
-    # ── Evaluation ─────────────────────────────────────────────────
+    # ── Stage 3: Quality validation ────────────────────────────────
     warnings: list[str] = []
+    quality_report = check_quality(final_ontology)
+
+    if not quality_report.passed:
+        for issue in quality_report.issues:
+            if issue.severity == "error":
+                warnings.append(f"[품질 오류] {issue.message}")
+    for issue in quality_report.issues:
+        if issue.severity == "warning":
+            warnings.append(f"[품질 경고] {issue.message}")
+
+    if domain_hint:
+        warnings.append(f"도메인 감지: {domain_hint.name}")
+
+    # ── Evaluation ─────────────────────────────────────────────────
     eval_report: EvalMetrics | None = None
     try:
         # Use ecommerce golden for ecommerce domains, auto-golden otherwise
@@ -105,4 +133,6 @@ def generate_ontology(
         version_id=version_id,
         stage=stage,
         warnings=warnings,
+        quality_score=quality_report.score,
+        detected_domain=domain_hint.name if domain_hint else None,
     )

@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 from app.config import settings
 from app.data_generator.generator import generate_sample_data, verify_fk_integrity
-from app.kg_builder.loader import load_to_neo4j
+from app.kg_builder.loader import load_from_mapping, load_to_neo4j
 from app.models.schemas import (
     ERDSchema,
     KGBuildErrorDetail,
@@ -115,6 +115,7 @@ def run_kg_build(
     ontology: OntologySpec,
     csv_data: dict[str, list[dict]] | None = None,
     tenant_id: str | None = None,
+    mapping_config: "DomainMappingConfig | None" = None,
 ) -> None:
     """Execute the full KG build pipeline (runs in background task).
 
@@ -152,6 +153,7 @@ def run_kg_build(
             progress=KGBuildProgress(current_step="fk_verification", step_number=2, total_steps=4),
         )
         violations = verify_fk_integrity(data, erd)
+        fk_error_count = len(violations) if violations else 0
         if violations:
             logger.warning("FK integrity violations: %s", violations)
 
@@ -160,19 +162,34 @@ def run_kg_build(
             job_id, status="running",
             progress=KGBuildProgress(current_step="neo4j_load", step_number=3, total_steps=4),
         )
-        stats = load_to_neo4j(
-            ontology,
-            data,
-            uri=settings.neo4j_uri,
-            user=settings.neo4j_user,
-            password=settings.neo4j_password,
-            tenant_id=tenant_id,
-        )
+        if mapping_config is not None:
+            stats = load_from_mapping(
+                mapping_config,
+                data,
+                uri=settings.neo4j_uri,
+                user=settings.neo4j_user,
+                password=settings.neo4j_password,
+                tenant_id=tenant_id,
+            )
+        else:
+            stats = load_to_neo4j(
+                ontology,
+                data,
+                uri=settings.neo4j_uri,
+                user=settings.neo4j_user,
+                password=settings.neo4j_password,
+                tenant_id=tenant_id,
+            )
 
-        # 5. Invalidate entity cache after successful build
+        # 5. Invalidate caches after successful build
         try:
             from app.query.local_search import invalidate_entity_cache
             invalidate_entity_cache(tenant_id)
+        except Exception:
+            pass
+        try:
+            from app.db.graph_schema import invalidate_schema_cache
+            invalidate_schema_cache(tenant_id)
         except Exception:
             pass
 
@@ -186,6 +203,7 @@ def run_kg_build(
             current_step="completed",
             step_number=4,
             total_steps=4,
+            error_count=fk_error_count,
         )
         _update_job(
             job_id,
