@@ -182,6 +182,7 @@ export interface ChatMessage {
   content: string;
   data?: QueryResponse;
   wisdomData?: WisdomResponse;
+  streaming?: boolean;
 }
 
 // ── DIKW Wisdom ─────────────────────────────────────────────────

@@ -37,7 +37,7 @@ from app.exceptions import (
     version_conflict_handler,
     version_not_found_handler,
 )
-from app.routers import csv_upload, ddl, evaluation, graph, health, kg_build, ontology, ontology_versions, query, wisdom
+from app.routers import csv_upload, ddl, evaluation, graph, health, kg_build, ontology, ontology_versions, query, sse, wisdom
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +91,7 @@ def create_app() -> FastAPI:
     application.include_router(csv_upload.router)
     application.include_router(graph.router)
     application.include_router(wisdom.router)
+    application.include_router(sse.router)
 
     # Startup: ensure PG table + run migrations
     @application.on_event("startup")

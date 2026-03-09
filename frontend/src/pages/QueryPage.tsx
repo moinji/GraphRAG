@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { sendQuery, sendWisdomQuery } from '@/api/client';
+import { streamQuery } from '@/api/sse';
 import { DEMO_QUESTIONS, DEMO_QUESTIONS_EN, WISDOM_DEMO_QUESTIONS } from '@/constants';
 import DIKWTimeline from '@/components/wisdom/DIKWTimeline';
 import type { ChatMessage, QueryResponse } from '@/types/ontology';
@@ -23,6 +24,8 @@ export default function QueryPage({ onBack }: QueryPageProps) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const abortRef = useRef<AbortController | null>(null);
+
   async function handleSend(question: string) {
     if (!question.trim() || sending) return;
 
@@ -40,7 +43,64 @@ export default function QueryPage({ onBack }: QueryPageProps) {
           wisdomData,
         };
         setMessages((prev) => [...prev, assistantMsg]);
+        setSending(false);
+      } else if (mode === 'b') {
+        // SSE streaming for mode B
+        const placeholder: ChatMessage = { role: 'assistant', content: '', streaming: true };
+        setMessages((prev) => [...prev, placeholder]);
+
+        abortRef.current = streamQuery(question, mode, {
+          onMetadata: (meta) => {
+            setMessages((prev) => {
+              const updated = [...prev];
+              const last = updated[updated.length - 1];
+              updated[updated.length - 1] = { ...last, data: meta as QueryResponse };
+              return updated;
+            });
+          },
+          onToken: (token) => {
+            setMessages((prev) => {
+              const updated = [...prev];
+              const last = updated[updated.length - 1];
+              updated[updated.length - 1] = { ...last, content: last.content + token };
+              return updated;
+            });
+          },
+          onComplete: (data) => {
+            setMessages((prev) => {
+              const updated = [...prev];
+              updated[updated.length - 1] = {
+                role: 'assistant',
+                content: data.answer,
+                data,
+                streaming: false,
+              };
+              return updated;
+            });
+            setSending(false);
+            abortRef.current = null;
+          },
+          onError: (error) => {
+            setMessages((prev) => {
+              const updated = [...prev];
+              const last = updated[updated.length - 1];
+              if (last.streaming) {
+                updated[updated.length - 1] = {
+                  role: 'assistant',
+                  content: last.content || error.message,
+                  streaming: false,
+                };
+              } else {
+                updated.push({ role: 'assistant', content: error.message });
+              }
+              return updated;
+            });
+            setSending(false);
+            abortRef.current = null;
+          },
+        });
       } else {
+        // Mode A: regular fetch
         const data = await sendQuery(question, mode);
         const assistantMsg: ChatMessage = {
           role: 'assistant',
@@ -48,6 +108,7 @@ export default function QueryPage({ onBack }: QueryPageProps) {
           data,
         };
         setMessages((prev) => [...prev, assistantMsg]);
+        setSending(false);
       }
     } catch (e) {
       const errorMsg: ChatMessage = {
@@ -55,10 +116,13 @@ export default function QueryPage({ onBack }: QueryPageProps) {
         content: e instanceof Error ? e.message : 'Query failed',
       };
       setMessages((prev) => [...prev, errorMsg]);
-    } finally {
       setSending(false);
     }
   }
+
+  useEffect(() => {
+    return () => { abortRef.current?.abort(); };
+  }, []);
 
   const demoQuestions = mode === 'w' ? WISDOM_DEMO_QUESTIONS : DEMO_QUESTIONS;
   const demoQuestionsEn = mode === 'w' ? null : DEMO_QUESTIONS_EN;
@@ -188,14 +252,17 @@ export default function QueryPage({ onBack }: QueryPageProps) {
                 />
               ) : (
                 <>
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
-                  {msg.data && <AssistantDetail data={msg.data} />}
+                  <p className="whitespace-pre-wrap">
+                    {msg.content}
+                    {msg.streaming && <span className="inline-block w-2 h-4 bg-current animate-pulse ml-0.5 align-text-bottom" />}
+                  </p>
+                  {msg.data && !msg.streaming && <AssistantDetail data={msg.data} />}
                 </>
               )}
             </div>
           </div>
         ))}
-        {sending && (
+        {sending && !messages.some(m => m.streaming) && (
           <div className="flex justify-start" role="status" aria-label="답변 생성 중">
             <div className={`rounded-lg p-3 text-sm text-muted-foreground animate-pulse ${
               mode === 'w' ? 'bg-amber-50 border border-amber-200' : 'bg-muted'

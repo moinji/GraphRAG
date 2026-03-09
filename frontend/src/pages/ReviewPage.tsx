@@ -12,8 +12,9 @@ import EditNodeDialog from '@/components/review/EditNodeDialog';
 import EditRelationshipDialog from '@/components/review/EditRelationshipDialog';
 import CSVUploadSection from '@/components/review/CSVUploadSection';
 import BuildKGActions from '@/components/review/BuildKGActions';
-import { updateVersion, approveVersion, startKGBuild, getKGBuildStatus, uploadCSVFiles, resetGraph, APIError } from '@/api/client';
-import { BUILD_POLL_INTERVAL_MS, SUCCESS_MSG_TIMEOUT_MS } from '@/constants';
+import { updateVersion, approveVersion, startKGBuild, uploadCSVFiles, resetGraph, APIError } from '@/api/client';
+import { streamKGBuild } from '@/api/sse';
+import { SUCCESS_MSG_TIMEOUT_MS } from '@/constants';
 import type {
   CSVTableSummary,
   ERDSchema,
@@ -50,7 +51,7 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
   const [buildJob, setBuildJob] = useState<KGBuildResponse | null>(null);
   const [buildLoading, setBuildLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollRef = useRef<(() => void) | null>(null);
 
   // CSV Import state
   const [csvSessionId, setCsvSessionId] = useState<string | null>(null);
@@ -207,7 +208,7 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
-      clearInterval(pollRef.current);
+      pollRef.current();
       pollRef.current = null;
     }
   }, []);
@@ -226,26 +227,26 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
       const job = await startKGBuild(versionId, erd, csvSessionId ?? undefined);
       setBuildJob(job);
 
-      pollRef.current = setInterval(async () => {
-        try {
-          const updated = await getKGBuildStatus(job.build_job_id);
-          setBuildJob(updated);
-          if (updated.status === 'succeeded' || updated.status === 'failed') {
-            stopPolling();
-            setBuildLoading(false);
-            if (updated.status === 'succeeded') {
-              showSuccess(
-                `KG built: ${updated.progress?.nodes_created ?? 0} nodes, ${updated.progress?.relationships_created ?? 0} relationships (${updated.progress?.duration_seconds ?? 0}s)`,
-              );
-            } else if (updated.error) {
-              showError(`Build failed at ${updated.error.stage}: ${updated.error.message}`);
-            }
-          }
-        } catch {
-          stopPolling();
+      const cleanup = streamKGBuild(
+        job.build_job_id,
+        (progress) => setBuildJob(progress),
+        (final) => {
+          setBuildJob(final);
           setBuildLoading(false);
-        }
-      }, BUILD_POLL_INTERVAL_MS);
+          if (final.status === 'succeeded') {
+            showSuccess(
+              `KG built: ${final.progress?.nodes_created ?? 0} nodes, ${final.progress?.relationships_created ?? 0} relationships (${final.progress?.duration_seconds ?? 0}s)`,
+            );
+          } else if (final.error) {
+            showError(`Build failed at ${final.error.stage}: ${final.error.message}`);
+          }
+        },
+        (error) => {
+          setBuildLoading(false);
+          showError(error.message);
+        },
+      );
+      pollRef.current = cleanup;
     } catch (e) {
       showError(e instanceof Error ? e.message : 'Build KG failed');
       setBuildLoading(false);
