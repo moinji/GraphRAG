@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth import APIKeyMiddleware
 from app.logging_config import setup_logging
+from app.rate_limit import RateLimitMiddleware
 
 # Initialize structured logging before anything else
 setup_logging(env=os.getenv("APP_ENV", "development"))
@@ -48,6 +49,10 @@ def create_app() -> FastAPI:
         description="ERD → Knowledge Graph → GraphRAG",
     )
 
+    # Rate limiting (production only, outermost → checked first)
+    if os.getenv("APP_ENV", "development") == "production":
+        application.add_middleware(RateLimitMiddleware, rate=60, window=60)
+
     # Auth middleware (must be added before CORS)
     application.add_middleware(APIKeyMiddleware)
 
@@ -57,8 +62,8 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization", "X-API-Key"],
     )
 
     # Error handlers
