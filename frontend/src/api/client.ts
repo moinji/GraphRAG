@@ -193,10 +193,14 @@ export async function startKGBuild(
   versionId: number,
   erd: ERDSchema,
   csvSessionId?: string,
+  useMapping?: boolean,
 ): Promise<KGBuildResponse> {
   const payload: Record<string, unknown> = { version_id: versionId, erd };
   if (csvSessionId) {
     payload.csv_session_id = csvSessionId;
+  }
+  if (useMapping) {
+    payload.use_mapping = true;
   }
   return request<KGBuildResponse>(`${BASE}/kg/build`, {
     method: 'POST',

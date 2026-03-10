@@ -381,11 +381,11 @@ def test_answer_korean():
         "고객 김민수가 주문한 상품은?",
         [{"result": "맥북프로"}],
         "two_hop",
-        {"start_label": "Customer"},
+        {"start_label": "Customer", "end_label": "Product"},
         {"val": "김민수"},
     )
     assert "김민수" in answer
-    assert "주문한 상품" in answer
+    assert "맥북프로" in answer
 
 
 def test_answer_english():
@@ -396,10 +396,10 @@ def test_answer_english():
         "What products did Alice order?",
         [{"result": "MacBookPro"}],
         "two_hop",
-        {"start_label": "Customer"},
+        {"start_label": "Customer", "end_label": "Product"},
         {"val": "Alice"},
     )
-    assert "Products ordered by" in answer
+    assert "Alice" in answer
     assert "MacBookPro" in answer
 
 

@@ -244,9 +244,10 @@ def _generate_answer(
     if template_id == "two_hop":
         items = [r.get("result", "") for r in records]
         name = params.get("val", "?")
+        end_label = slots.get("end_label", "항목")
         if ko:
-            return f"{name} 고객이 주문한 상품: {', '.join(str(i) for i in items)}"
-        return f"Products ordered by {name}: {', '.join(str(i) for i in items)}"
+            return f"{name}의 {end_label}: {', '.join(str(i) for i in items)}"
+        return f"{end_label} for {name}: {', '.join(str(i) for i in items)}"
 
     if template_id == "custom_q2":
         name = params.get("name", "?")
@@ -308,8 +309,8 @@ def _generate_answer(
         name = params.get("val", "?")
         end_label = slots.get("end_label", "항목")
         if ko:
-            return f"{name} 고객이 주문한 상품의 {end_label}: {', '.join(items)}"
-        return f"{end_label} for products ordered by {name}: {', '.join(items)}"
+            return f"{name}의 {end_label}: {', '.join(items)}"
+        return f"{end_label} for {name}: {', '.join(items)}"
 
     if template_id == "common_neighbor":
         items = [str(r.get("result", "")) for r in records]
@@ -334,10 +335,11 @@ def _generate_answer(
 
     if template_id == "reverse_two_hop":
         items = [str(r.get("result", "")) for r in records]
-        product = params.get("val", "?")
+        anchor = params.get("val", "?")
+        end_label = slots.get("end_label", "항목")
         if ko:
-            return f"{product}을(를) 주문한 고객: {', '.join(items)}"
-        return f"Customers who ordered {product}: {', '.join(items)}"
+            return f"{anchor} 관련 {end_label}: {', '.join(items)}"
+        return f"{end_label} related to {anchor}: {', '.join(items)}"
 
     if template_id == "count_all":
         total = records[0].get("total", 0)

@@ -263,14 +263,14 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
     return () => stopPolling();
   }, [stopPolling]);
 
-  async function handleBuildKG() {
+  async function handleBuildKG(useMapping = false) {
     if (!versionId) {
       showError('No version ID available');
       return;
     }
     setBuildLoading(true);
     try {
-      const job = await startKGBuild(versionId, erd, csvSessionId ?? undefined);
+      const job = await startKGBuild(versionId, erd, csvSessionId ?? undefined, useMapping || undefined);
       setBuildJob(job);
 
       const cleanup = streamKGBuild(
@@ -530,6 +530,20 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
                       rows={20}
                       spellCheck={false}
                     />
+                  )}
+                  {yamlContent && !yamlEditing && locked && (
+                    <div className="mt-3 pt-3 border-t">
+                      <Button
+                        onClick={() => handleBuildKG(true)}
+                        disabled={buildLoading}
+                        size="sm"
+                      >
+                        {buildLoading ? '빌드 중...' : 'Build KG (매핑 적용)'}
+                      </Button>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        현재 YAML 매핑 설정을 적용하여 Knowledge Graph를 빌드합니다.
+                      </p>
+                    </div>
                   )}
                 </CardContent>
               </Card>

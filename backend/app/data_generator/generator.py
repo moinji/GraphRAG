@@ -20,12 +20,35 @@ _ECOMMERCE_TABLES = {
     "wishlists", "shipping",
 }
 
+_EDUCATION_TABLES = {
+    "departments", "instructors", "semesters", "classrooms", "courses",
+    "students", "enrollments", "assignments", "grades", "prerequisites",
+    "certificates",
+}
+
+_INSURANCE_TABLES = {
+    "agents", "policyholders", "products", "coverages", "exclusions",
+    "policies", "policy_coverages", "policy_exclusions", "claims",
+    "claim_items", "settlements", "premiums",
+}
+
 
 def _is_ecommerce(erd: ERDSchema) -> bool:
     """Check if ERD looks like our e-commerce PoC schema."""
     table_names = {t.name for t in erd.tables}
-    # At least 8 of the 12 known tables must be present
     return len(table_names & _ECOMMERCE_TABLES) >= 8
+
+
+def _is_education(erd: ERDSchema) -> bool:
+    """Check if ERD looks like our education PoC schema."""
+    table_names = {t.name for t in erd.tables}
+    return len(table_names & _EDUCATION_TABLES) >= 7
+
+
+def _is_insurance(erd: ERDSchema) -> bool:
+    """Check if ERD looks like our insurance PoC schema."""
+    table_names = {t.name for t in erd.tables}
+    return len(table_names & _INSURANCE_TABLES) >= 8
 
 
 # ── Generic data generator ────────────────────────────────────────
@@ -373,16 +396,262 @@ def _generate_ecommerce_data() -> dict[str, list[dict]]:
     return data
 
 
+# ── Education hardcoded data ──────────────────────────────────────
+
+def _generate_education_data() -> dict[str, list[dict]]:
+    """Return hardcoded education sample data for demo queries.
+
+    Fixed seed data:
+      Q: 김철수 학생이 수강하는 과목은? → 자료구조, 운영체제, 영어회화
+      Q: 컴퓨터공학과에 개설된 과목은? → 자료구조, 운영체제, 알고리즘
+      Q: 자료구조의 선수과목은? → 프로그래밍입문
+    """
+    data: dict[str, list[dict]] = {}
+
+    data["departments"] = [
+        {"id": 1, "name": "컴퓨터공학과", "building": "공학관", "dean_name": "김교수"},
+        {"id": 2, "name": "경영학과", "building": "경영관", "dean_name": "이교수"},
+        {"id": 3, "name": "물리학과", "building": "자연관", "dean_name": "박교수"},
+        {"id": 4, "name": "영문학과", "building": "인문관", "dean_name": "최교수"},
+    ]
+
+    data["instructors"] = [
+        {"id": 1, "name": "김영수", "email": "yskim@univ.ac.kr", "department_id": 1, "title": "교수", "hire_date": "2010-03-01"},
+        {"id": 2, "name": "이정민", "email": "jmlee@univ.ac.kr", "department_id": 1, "title": "부교수", "hire_date": "2015-09-01"},
+        {"id": 3, "name": "박서연", "email": "sypark@univ.ac.kr", "department_id": 2, "title": "교수", "hire_date": "2008-03-01"},
+        {"id": 4, "name": "최민호", "email": "mhchoi@univ.ac.kr", "department_id": 3, "title": "조교수", "hire_date": "2020-03-01"},
+        {"id": 5, "name": "정하나", "email": "hjung@univ.ac.kr", "department_id": 4, "title": "교수", "hire_date": "2012-09-01"},
+    ]
+
+    data["semesters"] = [
+        {"id": 1, "name": "2024-1학기", "start_date": "2024-03-01", "end_date": "2024-06-20"},
+        {"id": 2, "name": "2024-2학기", "start_date": "2024-09-01", "end_date": "2024-12-20"},
+        {"id": 3, "name": "2025-1학기", "start_date": "2025-03-01", "end_date": "2025-06-20"},
+    ]
+
+    data["classrooms"] = [
+        {"id": 1, "building": "공학관", "room_number": "101", "capacity": 40},
+        {"id": 2, "building": "공학관", "room_number": "201", "capacity": 60},
+        {"id": 3, "building": "경영관", "room_number": "301", "capacity": 50},
+        {"id": 4, "building": "인문관", "room_number": "102", "capacity": 30},
+    ]
+
+    data["courses"] = [
+        {"id": 1, "code": "CS101", "title": "프로그래밍입문", "credits": 3, "department_id": 1, "instructor_id": 2, "semester_id": 1, "classroom_id": 1, "max_enrollment": 40},
+        {"id": 2, "code": "CS201", "title": "자료구조", "credits": 3, "department_id": 1, "instructor_id": 1, "semester_id": 1, "classroom_id": 2, "max_enrollment": 40},
+        {"id": 3, "code": "CS301", "title": "운영체제", "credits": 3, "department_id": 1, "instructor_id": 1, "semester_id": 2, "classroom_id": 1, "max_enrollment": 35},
+        {"id": 4, "code": "CS401", "title": "알고리즘", "credits": 3, "department_id": 1, "instructor_id": 2, "semester_id": 2, "classroom_id": 2, "max_enrollment": 35},
+        {"id": 5, "code": "BA201", "title": "마케팅원론", "credits": 3, "department_id": 2, "instructor_id": 3, "semester_id": 1, "classroom_id": 3, "max_enrollment": 50},
+        {"id": 6, "code": "EN101", "title": "영어회화", "credits": 2, "department_id": 4, "instructor_id": 5, "semester_id": 1, "classroom_id": 4, "max_enrollment": 30},
+    ]
+
+    data["students"] = [
+        {"id": 1, "name": "김철수", "email": "cs.kim@univ.ac.kr", "department_id": 1, "year": 2, "gpa": 3.8},
+        {"id": 2, "name": "이미영", "email": "my.lee@univ.ac.kr", "department_id": 1, "year": 3, "gpa": 4.2},
+        {"id": 3, "name": "박준호", "email": "jh.park@univ.ac.kr", "department_id": 2, "year": 1, "gpa": 3.5},
+        {"id": 4, "name": "최유진", "email": "yj.choi@univ.ac.kr", "department_id": 1, "year": 4, "gpa": 4.0},
+        {"id": 5, "name": "정서윤", "email": "sy.jung@univ.ac.kr", "department_id": 3, "year": 2, "gpa": 3.2},
+        {"id": 6, "name": "한지민", "email": "jm.han@univ.ac.kr", "department_id": 4, "year": 1, "gpa": 3.9},
+        {"id": 7, "name": "오현우", "email": "hw.oh@univ.ac.kr", "department_id": 1, "year": 3, "gpa": 3.6},
+        {"id": 8, "name": "윤소희", "email": "sh.yoon@univ.ac.kr", "department_id": 2, "year": 2, "gpa": 4.1},
+    ]
+
+    data["enrollments"] = [
+        {"id": 1, "student_id": 1, "course_id": 2, "grade": "A+", "enrollment_date": "2024-02-25", "status": "completed"},
+        {"id": 2, "student_id": 1, "course_id": 3, "grade": "A", "enrollment_date": "2024-08-25", "status": "completed"},
+        {"id": 3, "student_id": 1, "course_id": 6, "grade": "B+", "enrollment_date": "2024-02-25", "status": "completed"},
+        {"id": 4, "student_id": 2, "course_id": 3, "grade": "A+", "enrollment_date": "2024-08-25", "status": "completed"},
+        {"id": 5, "student_id": 2, "course_id": 4, "grade": "A", "enrollment_date": "2024-08-25", "status": "completed"},
+        {"id": 6, "student_id": 3, "course_id": 5, "grade": "B", "enrollment_date": "2024-02-25", "status": "completed"},
+        {"id": 7, "student_id": 4, "course_id": 4, "grade": "A+", "enrollment_date": "2024-08-25", "status": "completed"},
+        {"id": 8, "student_id": 5, "course_id": 1, "grade": "B+", "enrollment_date": "2024-02-25", "status": "completed"},
+        {"id": 9, "student_id": 6, "course_id": 6, "grade": "A", "enrollment_date": "2024-02-25", "status": "completed"},
+        {"id": 10, "student_id": 7, "course_id": 2, "grade": "B+", "enrollment_date": "2024-02-25", "status": "active"},
+        {"id": 11, "student_id": 7, "course_id": 3, "grade": None, "enrollment_date": "2024-08-25", "status": "active"},
+        {"id": 12, "student_id": 8, "course_id": 5, "grade": "A", "enrollment_date": "2024-02-25", "status": "completed"},
+    ]
+
+    data["assignments"] = [
+        {"id": 1, "course_id": 1, "title": "Hello World 프로그램", "due_date": "2024-03-15", "max_score": 100, "weight": 0.10},
+        {"id": 2, "course_id": 2, "title": "링크드리스트 구현", "due_date": "2024-04-01", "max_score": 100, "weight": 0.15},
+        {"id": 3, "course_id": 2, "title": "이진트리 과제", "due_date": "2024-05-01", "max_score": 100, "weight": 0.15},
+        {"id": 4, "course_id": 3, "title": "프로세스 스케줄링", "due_date": "2024-10-01", "max_score": 100, "weight": 0.20},
+        {"id": 5, "course_id": 4, "title": "정렬 알고리즘 비교", "due_date": "2024-10-15", "max_score": 100, "weight": 0.20},
+        {"id": 6, "course_id": 5, "title": "마케팅 전략 보고서", "due_date": "2024-04-20", "max_score": 100, "weight": 0.25},
+        {"id": 7, "course_id": 6, "title": "영어 프레젠테이션", "due_date": "2024-05-10", "max_score": 100, "weight": 0.20},
+        {"id": 8, "course_id": 3, "title": "메모리 관리 실습", "due_date": "2024-11-01", "max_score": 100, "weight": 0.20},
+    ]
+
+    data["grades"] = [
+        {"id": 1, "student_id": 1, "assignment_id": 2, "score": 95, "submitted_at": "2024-03-30T23:59:00"},
+        {"id": 2, "student_id": 1, "assignment_id": 3, "score": 88, "submitted_at": "2024-04-28T22:30:00"},
+        {"id": 3, "student_id": 1, "assignment_id": 4, "score": 92, "submitted_at": "2024-09-28T21:00:00"},
+        {"id": 4, "student_id": 1, "assignment_id": 7, "score": 85, "submitted_at": "2024-05-08T14:00:00"},
+        {"id": 5, "student_id": 2, "assignment_id": 4, "score": 98, "submitted_at": "2024-09-29T20:00:00"},
+        {"id": 6, "student_id": 2, "assignment_id": 5, "score": 95, "submitted_at": "2024-10-13T18:00:00"},
+        {"id": 7, "student_id": 2, "assignment_id": 8, "score": 90, "submitted_at": "2024-10-30T23:00:00"},
+        {"id": 8, "student_id": 3, "assignment_id": 6, "score": 78, "submitted_at": "2024-04-18T16:00:00"},
+        {"id": 9, "student_id": 4, "assignment_id": 5, "score": 100, "submitted_at": "2024-10-12T10:00:00"},
+        {"id": 10, "student_id": 5, "assignment_id": 1, "score": 82, "submitted_at": "2024-03-14T23:00:00"},
+        {"id": 11, "student_id": 6, "assignment_id": 7, "score": 90, "submitted_at": "2024-05-09T11:00:00"},
+        {"id": 12, "student_id": 7, "assignment_id": 2, "score": 80, "submitted_at": "2024-03-31T20:00:00"},
+        {"id": 13, "student_id": 7, "assignment_id": 3, "score": 75, "submitted_at": "2024-04-30T19:00:00"},
+        {"id": 14, "student_id": 8, "assignment_id": 6, "score": 92, "submitted_at": "2024-04-19T15:00:00"},
+        {"id": 15, "student_id": 4, "assignment_id": 8, "score": 88, "submitted_at": "2024-10-31T22:00:00"},
+    ]
+
+    data["prerequisites"] = [
+        {"id": 1, "course_id": 2, "prerequisite_id": 1},  # 자료구조 ← 프로그래밍입문
+        {"id": 2, "course_id": 3, "prerequisite_id": 2},  # 운영체제 ← 자료구조
+        {"id": 3, "course_id": 4, "prerequisite_id": 2},  # 알고리즘 ← 자료구조
+    ]
+
+    data["certificates"] = [
+        {"id": 1, "student_id": 1, "course_id": 2, "issued_date": "2024-06-25", "cert_type": "completion"},
+        {"id": 2, "student_id": 2, "course_id": 3, "issued_date": "2024-12-25", "cert_type": "completion"},
+        {"id": 3, "student_id": 2, "course_id": 4, "issued_date": "2024-12-25", "cert_type": "excellence"},
+        {"id": 4, "student_id": 4, "course_id": 4, "issued_date": "2024-12-25", "cert_type": "excellence"},
+        {"id": 5, "student_id": 8, "course_id": 5, "issued_date": "2024-06-25", "cert_type": "completion"},
+    ]
+
+    return data
+
+
+# ── Insurance hardcoded data ─────────────────────────────────────
+
+def _generate_insurance_data() -> dict[str, list[dict]]:
+    """Return hardcoded insurance sample data for demo queries.
+
+    Fixed seed data:
+      Q: 홍길동이 가입한 보험은? → 종합건강보험, 운전자보험
+      Q: 가장 청구가 많은 보험상품은? → 종합건강보험(3건)
+      Q: 종합건강보험의 보장 내용은? → 입원비, 수술비, 통원치료비
+    """
+    data: dict[str, list[dict]] = {}
+
+    data["agents"] = [
+        {"id": 1, "name": "김대리", "email": "agent.kim@ins.co.kr", "license_no": "AG-2020-001", "region": "서울"},
+        {"id": 2, "name": "이팀장", "email": "agent.lee@ins.co.kr", "license_no": "AG-2018-002", "region": "부산"},
+        {"id": 3, "name": "박설계사", "email": "agent.park@ins.co.kr", "license_no": "AG-2021-003", "region": "대구"},
+    ]
+
+    data["policyholders"] = [
+        {"id": 1, "name": "홍길동", "email": "gildong@example.com", "phone": "010-1111-2222", "birth_date": "1985-03-15", "address": "서울시 강남구 역삼동 123"},
+        {"id": 2, "name": "김영희", "email": "younghee@example.com", "phone": "010-3333-4444", "birth_date": "1990-07-22", "address": "부산시 해운대구 우동 456"},
+        {"id": 3, "name": "이철수", "email": "cheolsu@example.com", "phone": "010-5555-6666", "birth_date": "1978-11-30", "address": "대구시 수성구 범어동 789"},
+        {"id": 4, "name": "박민지", "email": "minji@example.com", "phone": "010-7777-8888", "birth_date": "1995-01-10", "address": "인천시 연수구 송도동 321"},
+        {"id": 5, "name": "최준혁", "email": "junhyuk@example.com", "phone": "010-9999-0000", "birth_date": "1982-06-05", "address": "서울시 서초구 반포동 654"},
+    ]
+
+    data["products"] = [
+        {"id": 1, "name": "종합건강보험", "category": "건강", "base_premium": 85000, "description": "입원, 수술, 통원 종합 보장"},
+        {"id": 2, "name": "운전자보험", "category": "상해", "base_premium": 35000, "description": "교통사고 및 운전 관련 보장"},
+        {"id": 3, "name": "암보험", "category": "건강", "base_premium": 120000, "description": "암 진단금 및 치료비 보장"},
+        {"id": 4, "name": "화재보험", "category": "재산", "base_premium": 25000, "description": "주택 화재 및 재산 손해 보장"},
+    ]
+
+    data["coverages"] = [
+        {"id": 1, "name": "입원비", "description": "1일당 입원비 보장", "coverage_type": "정액"},
+        {"id": 2, "name": "수술비", "description": "수술 종류별 보장금액", "coverage_type": "정액"},
+        {"id": 3, "name": "통원치료비", "description": "외래 진료 및 처방 보장", "coverage_type": "실손"},
+        {"id": 4, "name": "사망보험금", "description": "사망 시 보험금 지급", "coverage_type": "정액"},
+        {"id": 5, "name": "교통사고 치료비", "description": "교통사고 치료비 보장", "coverage_type": "실손"},
+    ]
+
+    data["exclusions"] = [
+        {"id": 1, "name": "고의사고", "description": "고의에 의한 사고는 보장 제외"},
+        {"id": 2, "name": "음주운전", "description": "음주운전 중 발생한 사고 보장 제외"},
+        {"id": 3, "name": "기존질환", "description": "가입 전 진단된 질환 보장 제외"},
+    ]
+
+    data["policies"] = [
+        {"id": 1, "policy_number": "POL-2024-001", "policyholder_id": 1, "product_id": 1, "agent_id": 1, "start_date": "2024-01-01", "end_date": "2034-01-01", "status": "active", "total_premium": 85000},
+        {"id": 2, "policy_number": "POL-2024-002", "policyholder_id": 1, "product_id": 2, "agent_id": 1, "start_date": "2024-02-01", "end_date": "2034-02-01", "status": "active", "total_premium": 35000},
+        {"id": 3, "policy_number": "POL-2024-003", "policyholder_id": 2, "product_id": 1, "agent_id": 2, "start_date": "2024-01-15", "end_date": "2034-01-15", "status": "active", "total_premium": 85000},
+        {"id": 4, "policy_number": "POL-2024-004", "policyholder_id": 2, "product_id": 3, "agent_id": 2, "start_date": "2024-03-01", "end_date": "2034-03-01", "status": "active", "total_premium": 120000},
+        {"id": 5, "policy_number": "POL-2024-005", "policyholder_id": 3, "product_id": 1, "agent_id": 3, "start_date": "2024-02-15", "end_date": "2034-02-15", "status": "active", "total_premium": 85000},
+        {"id": 6, "policy_number": "POL-2024-006", "policyholder_id": 3, "product_id": 4, "agent_id": 3, "start_date": "2024-04-01", "end_date": "2034-04-01", "status": "active", "total_premium": 25000},
+        {"id": 7, "policy_number": "POL-2024-007", "policyholder_id": 4, "product_id": 2, "agent_id": 1, "start_date": "2024-05-01", "end_date": "2034-05-01", "status": "active", "total_premium": 35000},
+        {"id": 8, "policy_number": "POL-2024-008", "policyholder_id": 5, "product_id": 3, "agent_id": 2, "start_date": "2024-03-15", "end_date": "2034-03-15", "status": "lapsed", "total_premium": 120000},
+    ]
+
+    data["policy_coverages"] = [
+        {"id": 1, "policy_id": 1, "coverage_id": 1, "limit_amount": 50000000, "deductible": 0},
+        {"id": 2, "policy_id": 1, "coverage_id": 2, "limit_amount": 30000000, "deductible": 0},
+        {"id": 3, "policy_id": 1, "coverage_id": 3, "limit_amount": 5000000, "deductible": 10000},
+        {"id": 4, "policy_id": 2, "coverage_id": 5, "limit_amount": 20000000, "deductible": 0},
+        {"id": 5, "policy_id": 3, "coverage_id": 1, "limit_amount": 50000000, "deductible": 0},
+        {"id": 6, "policy_id": 3, "coverage_id": 2, "limit_amount": 30000000, "deductible": 0},
+        {"id": 7, "policy_id": 4, "coverage_id": 4, "limit_amount": 100000000, "deductible": 0},
+        {"id": 8, "policy_id": 5, "coverage_id": 1, "limit_amount": 50000000, "deductible": 0},
+        {"id": 9, "policy_id": 5, "coverage_id": 3, "limit_amount": 5000000, "deductible": 10000},
+        {"id": 10, "policy_id": 7, "coverage_id": 5, "limit_amount": 20000000, "deductible": 0},
+    ]
+
+    data["policy_exclusions"] = [
+        {"id": 1, "policy_id": 1, "exclusion_id": 1},
+        {"id": 2, "policy_id": 1, "exclusion_id": 3},
+        {"id": 3, "policy_id": 2, "exclusion_id": 1},
+        {"id": 4, "policy_id": 2, "exclusion_id": 2},
+    ]
+
+    data["claims"] = [
+        {"id": 1, "claim_number": "CLM-2024-001", "policy_id": 1, "policyholder_id": 1, "filed_date": "2024-06-15", "incident_date": "2024-06-10", "description": "급성 맹장염 수술", "status": "settled", "claimed_amount": 5000000},
+        {"id": 2, "claim_number": "CLM-2024-002", "policy_id": 3, "policyholder_id": 2, "filed_date": "2024-07-20", "incident_date": "2024-07-18", "description": "골절 입원 치료", "status": "settled", "claimed_amount": 3000000},
+        {"id": 3, "claim_number": "CLM-2024-003", "policy_id": 1, "policyholder_id": 1, "filed_date": "2024-09-05", "incident_date": "2024-09-01", "description": "통원 치료 (허리디스크)", "status": "approved", "claimed_amount": 800000},
+        {"id": 4, "claim_number": "CLM-2024-004", "policy_id": 5, "policyholder_id": 3, "filed_date": "2024-08-10", "incident_date": "2024-08-05", "description": "교통사고 입원", "status": "pending", "claimed_amount": 10000000},
+        {"id": 5, "claim_number": "CLM-2024-005", "policy_id": 2, "policyholder_id": 1, "filed_date": "2024-10-01", "incident_date": "2024-09-28", "description": "주차장 접촉사고", "status": "rejected", "claimed_amount": 500000},
+        {"id": 6, "claim_number": "CLM-2024-006", "policy_id": 3, "policyholder_id": 2, "filed_date": "2024-11-15", "incident_date": "2024-11-10", "description": "감기 통원 치료", "status": "settled", "claimed_amount": 200000},
+    ]
+
+    data["claim_items"] = [
+        {"id": 1, "claim_id": 1, "item_type": "수술비", "amount": 3000000, "description": "맹장 수술"},
+        {"id": 2, "claim_id": 1, "item_type": "입원비", "amount": 1500000, "description": "5일 입원"},
+        {"id": 3, "claim_id": 1, "item_type": "약제비", "amount": 500000, "description": "항생제 등"},
+        {"id": 4, "claim_id": 2, "item_type": "입원비", "amount": 2000000, "description": "7일 입원"},
+        {"id": 5, "claim_id": 2, "item_type": "치료비", "amount": 1000000, "description": "골절 치료"},
+        {"id": 6, "claim_id": 3, "item_type": "통원비", "amount": 600000, "description": "물리치료 10회"},
+        {"id": 7, "claim_id": 3, "item_type": "약제비", "amount": 200000, "description": "진통제 등"},
+        {"id": 8, "claim_id": 4, "item_type": "입원비", "amount": 5000000, "description": "15일 입원"},
+        {"id": 9, "claim_id": 4, "item_type": "수술비", "amount": 5000000, "description": "외과 수술"},
+        {"id": 10, "claim_id": 6, "item_type": "통원비", "amount": 200000, "description": "외래 진료"},
+    ]
+
+    data["settlements"] = [
+        {"id": 1, "claim_id": 1, "settled_amount": 4500000, "settled_date": "2024-07-01", "method": "계좌이체"},
+        {"id": 2, "claim_id": 2, "settled_amount": 2800000, "settled_date": "2024-08-05", "method": "계좌이체"},
+        {"id": 3, "claim_id": 3, "settled_amount": 750000, "settled_date": "2024-09-20", "method": "계좌이체"},
+        {"id": 4, "claim_id": 6, "settled_amount": 180000, "settled_date": "2024-12-01", "method": "계좌이체"},
+    ]
+
+    data["premiums"] = [
+        {"id": 1, "policy_id": 1, "amount": 85000, "due_date": "2024-01-01", "paid_date": "2024-01-01", "status": "paid"},
+        {"id": 2, "policy_id": 1, "amount": 85000, "due_date": "2024-02-01", "paid_date": "2024-02-01", "status": "paid"},
+        {"id": 3, "policy_id": 2, "amount": 35000, "due_date": "2024-02-01", "paid_date": "2024-02-01", "status": "paid"},
+        {"id": 4, "policy_id": 3, "amount": 85000, "due_date": "2024-01-15", "paid_date": "2024-01-15", "status": "paid"},
+        {"id": 5, "policy_id": 4, "amount": 120000, "due_date": "2024-03-01", "paid_date": "2024-03-01", "status": "paid"},
+        {"id": 6, "policy_id": 5, "amount": 85000, "due_date": "2024-02-15", "paid_date": "2024-02-15", "status": "paid"},
+        {"id": 7, "policy_id": 7, "amount": 35000, "due_date": "2024-05-01", "paid_date": "2024-05-01", "status": "paid"},
+        {"id": 8, "policy_id": 8, "amount": 120000, "due_date": "2024-03-15", "paid_date": None, "status": "overdue"},
+    ]
+
+    return data
+
+
 # ── Public API ────────────────────────────────────────────────────
 
 def generate_sample_data(erd: ERDSchema) -> dict[str, list[dict]]:
     """Return table_name → list[row_dict].
 
-    E-commerce schema uses fixed demo data.
+    Known domains (ecommerce/education/insurance) use fixed seed data.
     Any other schema gets auto-generated sample data.
     """
     if _is_ecommerce(erd):
         return _generate_ecommerce_data()
+    if _is_education(erd):
+        return _generate_education_data()
+    if _is_insurance(erd):
+        return _generate_insurance_data()
     return _generate_generic_data(erd)
 
 
