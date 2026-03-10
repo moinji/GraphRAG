@@ -247,3 +247,56 @@ def test_generic_aggregate_fallback():
         cypher = _build_generic_aggregate()
     assert cypher is not None
     assert "ENROLLED_IN" in cypher
+
+
+# ════════════════════════════════════════════════════════════════════
+#  Schema-Aware Rule Router
+# ════════════════════════════════════════════════════════════════════
+
+
+def test_schema_aware_count_ko():
+    """#13: Korean count query matched via schema-aware fallback."""
+    from app.query.router_rules import _try_schema_aware_match
+
+    labels = ["Student", "Course", "Instructor"]
+    schema = {"node_labels": labels, "node_properties": {}, "relationship_types": []}
+    with patch("app.db.graph_schema.get_graph_schema", return_value=schema):
+        result = _try_schema_aware_match("총 Student 수는?", None)
+    assert result is not None
+    assert result[0] == "count_all"
+    assert result[2]["label"] == "Student"
+
+
+def test_schema_aware_count_en():
+    """#14: English count query matched via schema-aware fallback."""
+    from app.query.router_rules import _try_schema_aware_match
+
+    labels = ["Policyholder", "Policy", "Claim"]
+    schema = {"node_labels": labels, "node_properties": {}, "relationship_types": []}
+    with patch("app.db.graph_schema.get_graph_schema", return_value=schema):
+        result = _try_schema_aware_match("How many policies are there?", None)
+    assert result is not None
+    assert result[0] == "count_all"
+    assert result[2]["label"] == "Policy"
+
+
+def test_schema_aware_no_match():
+    """#15: Schema-aware returns None for unknown labels."""
+    from app.query.router_rules import _try_schema_aware_match
+
+    labels = ["Student", "Course"]
+    schema = {"node_labels": labels, "node_properties": {}, "relationship_types": []}
+    with patch("app.db.graph_schema.get_graph_schema", return_value=schema):
+        result = _try_schema_aware_match("총 고양이 수는?", None)
+    assert result is None
+
+
+def test_fuzzy_label_match_plural():
+    """#16: Fuzzy label matching handles plural forms."""
+    from app.query.router_rules import _fuzzy_match_label
+
+    labels = ["Student", "Course", "Policyholder"]
+    assert _fuzzy_match_label("students", labels) == "Student"
+    assert _fuzzy_match_label("course", labels) == "Course"
+    assert _fuzzy_match_label("policyholder", labels) == "Policyholder"
+    assert _fuzzy_match_label("unknown", labels) is None

@@ -2,11 +2,15 @@
 
 Handles demo questions and common aggregation patterns without LLM.
 Supports Korean and English questions.
+Schema-aware fallbacks for count/property queries on any domain.
 """
 
 from __future__ import annotations
 
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 # Return type: (template_id, route, slots, params)
 RouteResult = tuple[str, str, dict[str, str], dict[str, object]]
@@ -189,12 +193,13 @@ _Q12_EN = re.compile(
 )
 
 
-def classify_by_rules(question: str) -> RouteResult | None:
+def classify_by_rules(question: str, tenant_id: str | None = None) -> RouteResult | None:
     """Try to match question against rule patterns.
 
     Returns (template_id, route, slots, params) or None if no match.
     Checks both Korean and English patterns.
     Order matters: more specific patterns are checked first.
+    Falls back to schema-aware generic patterns for any domain.
     """
     # Q2 must be checked before Q1 (Q2 is a superset pattern)
     m = _Q2_RE.search(question)
@@ -432,6 +437,11 @@ def classify_by_rules(question: str) -> RouteResult | None:
         target = m.group("target").lower()
         return _build_group_count_en(group_key, target)
 
+    # ── Schema-aware generic fallbacks ──────────────────────────────
+    schema_result = _try_schema_aware_match(question, tenant_id)
+    if schema_result is not None:
+        return schema_result
+
     return None
 
 
@@ -526,3 +536,112 @@ def _build_group_count_en(group_key: str, target: str) -> RouteResult:
         {"start_label": "Product", "rel1": "BELONGS_TO", "end_label": "Category", "group_prop": "name"},
         {"limit": 100},
     )
+
+
+# ── Schema-aware generic patterns ────────────────────────────────
+
+# Generic count pattern: "총 X 수는?" / "How many X?"
+_GENERIC_COUNT_KO = re.compile(
+    r"총\s*(?P<entity>\S+?)\s*수"
+    r"|(?P<entity2>\S+?)(?:는|이|가)?\s*(?:총\s*)?몇\s*(?:명|개|건)"
+)
+_GENERIC_COUNT_EN = re.compile(
+    r"(?:how\s+many|total(?:\s+number\s+of)?)\s+(?P<entity>\w+)",
+    re.IGNORECASE,
+)
+
+# Generic property lookup: "X의 Y는?" / "What is X's Y?"
+_GENERIC_PROP_KO = re.compile(
+    r"(?P<entity>\S+?)(?:의|[은는])\s*(?P<prop>\S+?)(?:은|는|이|가|을|를)?"
+    r"\s*(?:무엇|뭐|얼마|어떻게|몇)",
+)
+_GENERIC_PROP_EN = re.compile(
+    r"(?:what(?:\s+is)?)\s+(?P<entity>\S+?)(?:'s)?\s+(?P<prop>\w+)"
+    r"|(?P<prop2>\w+)\s+(?:of|for)\s+(?P<entity2>\S+)",
+    re.IGNORECASE,
+)
+
+
+def _get_schema_labels(tenant_id: str | None = None) -> list[str]:
+    """Get node labels from graph schema (cached). Returns [] on failure."""
+    try:
+        from app.db.graph_schema import get_graph_schema
+        schema = get_graph_schema(tenant_id)
+        return schema.get("node_labels", [])
+    except Exception:
+        return []
+
+
+def _get_schema_properties(tenant_id: str | None = None) -> dict[str, list[str]]:
+    """Get node properties from graph schema (cached). Returns {} on failure."""
+    try:
+        from app.db.graph_schema import get_graph_schema
+        schema = get_graph_schema(tenant_id)
+        return schema.get("node_properties", {})
+    except Exception:
+        return {}
+
+
+def _depluralize(word: str) -> str:
+    """Naive English depluralization."""
+    w = word.lower()
+    if w.endswith("ies") and len(w) > 4:
+        return w[:-3] + "y"  # policies → policy
+    if w.endswith("es") and len(w) > 3:
+        return w[:-2]  # classes → class
+    if w.endswith("s") and len(w) > 2:
+        return w[:-1]  # students → student
+    return w
+
+
+def _fuzzy_match_label(text: str, labels: list[str]) -> str | None:
+    """Match a text fragment to a Neo4j label (case-insensitive, singular/plural)."""
+    lower = text.lower()
+    singular = _depluralize(lower)
+    for label in labels:
+        ll = label.lower()
+        if ll == lower or ll == singular or _depluralize(ll) == singular:
+            return label
+    return None
+
+
+def _try_schema_aware_match(question: str, tenant_id: str | None) -> RouteResult | None:
+    """Try schema-aware generic patterns against live Neo4j labels."""
+    # Generic count: "총 학생 수는?" / "How many policies?"
+    m = _GENERIC_COUNT_KO.search(question)
+    if m:
+        entity_text = m.group("entity") or m.group("entity2")
+        if entity_text:
+            labels = _get_schema_labels(tenant_id)
+            label = _fuzzy_match_label(entity_text, labels)
+            if label:
+                return ("count_all", "cypher_agg", {"label": label}, {})
+
+    m = _GENERIC_COUNT_EN.search(question)
+    if m:
+        entity_text = m.group("entity")
+        if entity_text:
+            labels = _get_schema_labels(tenant_id)
+            label = _fuzzy_match_label(entity_text, labels)
+            if label:
+                return ("count_all", "cypher_agg", {"label": label}, {})
+
+    # Generic property lookup: "홍길동의 email은?" / "What is 홍길동's phone?"
+    m = _GENERIC_PROP_EN.search(question)
+    if m:
+        entity_text = m.group("entity") or m.group("entity2")
+        prop_text = m.group("prop") or m.group("prop2")
+        if entity_text and prop_text:
+            props = _get_schema_properties(tenant_id)
+            for label, prop_list in props.items():
+                prop_lower = prop_text.lower()
+                if prop_lower in [p.lower() for p in prop_list]:
+                    actual_prop = next(p for p in prop_list if p.lower() == prop_lower)
+                    return (
+                        "property_lookup",
+                        "cypher_traverse",
+                        {"label": label, "match_prop": "name", "return_prop": actual_prop},
+                        {"val": entity_text},
+                    )
+
+    return None

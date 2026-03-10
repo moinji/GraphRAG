@@ -22,8 +22,8 @@ def route_question(
     2. LLM fallback (optional, if API key configured — schema-aware)
     3. Unsupported (graceful degradation)
     """
-    # Stage 1: Rules
-    result = classify_by_rules(question)
+    # Stage 1: Rules (with optional schema-aware fallback)
+    result = classify_by_rules(question, tenant_id=tenant_id)
     if result is not None:
         tid, route, slots, params = result
         return (tid, route, slots, params, "rule")
