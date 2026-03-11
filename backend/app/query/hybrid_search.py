@@ -39,6 +39,13 @@ def run_hybrid_query(
 
     Returns QueryResponse with document_sources populated.
     """
+    # Demo cache (skip in multi-tenant mode)
+    if tenant_id is None:
+        from app.query.demo_cache_c import get_cached_answer_c
+        cached = get_cached_answer_c(question)
+        if cached is not None:
+            return cached
+
     start_time = time.time()
     ko = bool(_HANGUL_RE.search(question))
 
@@ -151,6 +158,15 @@ def _get_kg_context(
         driver = get_driver()
         lines: list[str] = ["[그래프 컨텍스트]"]
 
+        # OWL _CLOSURE 관계도 탐색 (enable_owl=True일 때)
+        closure_rels: list[str] = []
+        try:
+            from app.config import settings as _settings
+            if _settings.enable_owl:
+                _fetch_closure_types(driver, closure_rels, tenant_id)
+        except Exception:
+            pass
+
         for entity_name, entity_label in found_entities:
             cypher = build_subgraph_cypher(entity_label, depth=1, tenant_id=tenant_id)
             try:
@@ -161,7 +177,7 @@ def _get_kg_context(
                 if records and records[0].get("anchor") is not None:
                     rec = records[0]
                     anchor_label = rec.get("anchor_label", entity_label)
-                    hop1 = rec.get("hop1", [])[:10]  # limit neighbors
+                    hop1 = rec.get("hop1", [])[:10]
 
                     lines.append(f"\n{anchor_label}({entity_name}):")
                     seen = set()
@@ -173,6 +189,15 @@ def _get_kg_context(
                         if key not in seen:
                             seen.add(key)
                             lines.append(f"  -{rel}-> {nlabel}({nname})")
+
+                # OWL: _CLOSURE 관계를 통한 확장 탐색
+                if closure_rels:
+                    _fetch_closure_context(
+                        driver, entity_name, entity_label,
+                        closure_rels, lines, seen if 'seen' in dir() else set(),
+                        tenant_id,
+                    )
+
             except Exception as e:
                 logger.debug("KG context fetch failed for %s: %s", entity_name, e)
 
@@ -280,3 +305,49 @@ def _build_document_sources(vector_results: list[dict]) -> list[DocumentSource]:
             chunk_index=result.get("chunk_index", 0),
         ))
     return sources
+
+
+def _fetch_closure_types(driver, closure_rels: list[str], tenant_id: str | None) -> None:
+    """Neo4j에서 _CLOSURE로 끝나는 관계 타입을 조회."""
+    try:
+        with driver.session() as session:
+            result = session.run(
+                "CALL db.relationshipTypes() YIELD relationshipType "
+                "WHERE relationshipType ENDS WITH '_CLOSURE' "
+                "RETURN relationshipType"
+            )
+            for rec in result:
+                closure_rels.append(rec["relationshipType"])
+    except Exception as e:
+        logger.debug("Failed to fetch closure types: %s", e)
+
+
+def _fetch_closure_context(
+    driver, entity_name: str, entity_label: str,
+    closure_rels: list[str], lines: list[str], seen: set,
+    tenant_id: str | None,
+) -> None:
+    """_CLOSURE 관계를 통한 확장 컨텍스트 탐색."""
+    from app.tenant import tenant_label_prefix
+    prefix = tenant_label_prefix(tenant_id)
+    label = f"{prefix}{entity_label}" if prefix else entity_label
+
+    for crel in closure_rels:
+        cypher = (
+            f"MATCH (a:`{label}` {{name: $name}})-[:`{crel}`]->(b) "
+            f"RETURN labels(b)[0] AS label, b.name AS name, $rel AS rel LIMIT 5"
+        )
+        try:
+            with driver.session() as session:
+                result = session.run(cypher, name=entity_name, rel=crel)
+                for rec in result:
+                    nlabel = rec.get("label", "?")
+                    if prefix and nlabel.startswith(prefix):
+                        nlabel = nlabel[len(prefix):]
+                    nname = rec.get("name", "?")
+                    key = f"{nlabel}:{nname}:{crel}"
+                    if key not in seen:
+                        seen.add(key)
+                        lines.append(f"  -{crel}-> {nlabel}({nname})")
+        except Exception:
+            pass

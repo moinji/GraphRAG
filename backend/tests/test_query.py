@@ -680,3 +680,70 @@ def test_answer_count_all():
     )
     assert "5" in answer
     assert "Customer" in answer
+
+
+# ════════════════════════════════════════════════════════════════════
+#  Mode C Demo Cache
+# ════════════════════════════════════════════════════════════════════
+
+
+def test_cache_c_hit_battery():
+    """#47: Mode C cache hit for battery question."""
+    from app.query.demo_cache_c import get_cached_answer_c
+
+    resp = get_cached_answer_c("맥북프로의 배터리 수명은 얼마나 되나요?")
+    assert resp is not None
+    assert resp.cached is True
+    assert resp.mode == "c"
+    assert "22시간" in resp.answer
+    assert len(resp.document_sources) == 1
+    assert resp.document_sources[0].filename == "맥북프로_제품설명.md"
+
+
+def test_cache_c_hit_hybrid():
+    """#48: Mode C cache hit for hybrid question (KG + doc)."""
+    from app.query.demo_cache_c import get_cached_answer_c
+
+    resp = get_cached_answer_c("김민수가 주문한 맥북프로의 주요 사양은?")
+    assert resp is not None
+    assert resp.cached is True
+    assert "M3" in resp.answer
+    assert resp.subgraph_context is not None
+    assert len(resp.document_sources) >= 1
+    assert "Customer_1" in resp.related_node_ids
+
+
+def test_cache_c_hit_return_policy():
+    """#49: Mode C cache hit for return policy (doc-only)."""
+    from app.query.demo_cache_c import get_cached_answer_c
+
+    resp = get_cached_answer_c("반품 정책은 어떻게 되나요?")
+    assert resp is not None
+    assert "7일" in resp.answer
+    assert resp.document_sources[0].filename == "쇼핑몰_이용안내.md"
+
+
+def test_cache_c_miss():
+    """#50: Mode C cache miss returns None."""
+    from app.query.demo_cache_c import get_cached_answer_c
+
+    resp = get_cached_answer_c("존재하지 않는 질문")
+    assert resp is None
+
+
+def test_cache_c_all_five_present():
+    """#51: All 5 Mode C demo questions are cached."""
+    from app.query.demo_cache_c import get_cached_answer_c
+
+    questions = [
+        "맥북프로의 배터리 수명은 얼마나 되나요?",
+        "에어팟프로의 노이즈캔슬링 기능에 대해 설명해주세요.",
+        "김민수가 주문한 맥북프로의 주요 사양은?",
+        "반품 정책은 어떻게 되나요?",
+        "애플코리아가 공급하는 제품들의 특징은?",
+    ]
+    for q in questions:
+        resp = get_cached_answer_c(q)
+        assert resp is not None, f"Cache miss for: {q}"
+        assert resp.cached is True
+        assert resp.mode == "c"

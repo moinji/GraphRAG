@@ -14,6 +14,14 @@ export const DEMO_QUESTIONS_EN = [
   { label: 'Q5', text: 'Coupon used vs unused average amount comparison' },
 ] as const;
 
+export const DEMO_QUESTIONS_C = [
+  { label: 'C1', text: '맥북프로의 배터리 수명은 얼마나 되나요?' },
+  { label: 'C2', text: '에어팟프로의 노이즈캔슬링 기능에 대해 설명해주세요.' },
+  { label: 'C3', text: '김민수가 주문한 맥북프로의 주요 사양은?' },
+  { label: 'C4', text: '반품 정책은 어떻게 되나요?' },
+  { label: 'C5', text: '애플코리아가 공급하는 제품들의 특징은?' },
+] as const;
+
 export const WISDOM_DEMO_QUESTIONS = [
   { label: 'W1', text: '고객 구매 패턴에서 어떤 트렌드가 보이나요?' },
   { label: 'W2', text: '리뷰 평점이 높은 상품이 실제로 더 많이 팔리나요?' },

@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { sendQuery, sendWisdomQuery } from '@/api/client';
 import { streamQuery } from '@/api/sse';
-import { DEMO_QUESTIONS, DEMO_QUESTIONS_EN, WISDOM_DEMO_QUESTIONS, SSE_STREAM_TIMEOUT_MS } from '@/constants';
+import { DEMO_QUESTIONS, DEMO_QUESTIONS_EN, DEMO_QUESTIONS_C, WISDOM_DEMO_QUESTIONS, SSE_STREAM_TIMEOUT_MS } from '@/constants';
 import DIKWTimeline from '@/components/wisdom/DIKWTimeline';
 import type { ChatMessage, QueryResponse } from '@/types/ontology';
 
@@ -131,8 +131,8 @@ export default function QueryPage({ onBack }: QueryPageProps) {
     return () => { abortRef.current?.abort(); };
   }, []);
 
-  const demoQuestions = mode === 'w' ? WISDOM_DEMO_QUESTIONS : DEMO_QUESTIONS;
-  const demoQuestionsEn = mode === 'w' ? null : DEMO_QUESTIONS_EN;
+  const demoQuestions = mode === 'w' ? WISDOM_DEMO_QUESTIONS : mode === 'c' ? DEMO_QUESTIONS_C : DEMO_QUESTIONS;
+  const demoQuestionsEn = (mode === 'w' || mode === 'c') ? null : DEMO_QUESTIONS_EN;
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
