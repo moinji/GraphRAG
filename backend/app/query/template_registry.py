@@ -115,6 +115,67 @@ ORDER BY n.{sort_prop} DESC
 LIMIT 1
 """.strip()
 
+# ── Extended templates ────────────────────────────────────────────
+
+_AVG_PROP = """
+MATCH (n:{label})
+RETURN round(avg(toFloat(n.{prop})) * 100) / 100 AS average
+""".strip()
+
+_REVIEW_TOP_N = """
+MATCH (r:Review)-[:REVIEWS]->(p:Product)
+WITH p.name AS product, round(avg(toFloat(r.rating)) * 100) / 100 AS avg_rating
+ORDER BY avg_rating DESC
+LIMIT $limit
+RETURN product, avg_rating
+""".strip()
+
+_SHIPPING_STATS = """
+MATCH (:Order)-[s:SHIPPED_TO]->(:Address)
+RETURN s.status AS group_key, count(*) AS cnt
+ORDER BY cnt DESC
+""".strip()
+
+_PAYMENT_STATS = """
+MATCH (p:Payment)
+RETURN p.method AS group_key, count(*) AS cnt
+ORDER BY cnt DESC
+""".strip()
+
+_ORDER_SHIPPING = """
+MATCH (c:Customer {name: $name})-[:PLACED]->(o:Order)-[s:SHIPPED_TO]->(:Address)
+RETURN o.id AS order_id, s.status AS result
+""".strip()
+
+_ORDER_PAYMENT = """
+MATCH (c:Customer {name: $name})-[:PLACED]->(o:Order)-[:PAID_BY]->(p:Payment)
+RETURN o.id AS order_id, p.method AS result
+""".strip()
+
+_COUPON_ORDERS = """
+MATCH (o:Order)-[:USED_COUPON]->(c:Coupon {code: $code})
+RETURN o.id AS order_id, o.total_amount AS amount
+""".strip()
+
+_CITY_CUSTOMERS = """
+MATCH (c:Customer)-[:LIVES_AT]->(a:Address)
+WHERE a.city CONTAINS $city
+RETURN c.name AS result
+""".strip()
+
+_CATEGORY_COMPARE = """
+MATCH (o:Order)-[:CONTAINS]->(p:Product)-[:BELONGS_TO]->(c:Category)
+WHERE c.name IN [$val1, $val2]
+RETURN c.name AS category, count(DISTINCT o) AS order_count
+ORDER BY order_count DESC
+""".strip()
+
+_SUPPLIER_COMPARE = """
+MATCH (p:Product)-[:SUPPLIED_BY]->(s:Supplier)
+WHERE s.name IN [$val1, $val2]
+RETURN s.name AS supplier, collect(p.name) AS products, count(p) AS product_count
+""".strip()
+
 # ── Custom templates (domain-specific) ───────────────────────────
 
 _CUSTOM_Q2 = """
@@ -289,6 +350,96 @@ REGISTRY: dict[str, TemplateSpec] = {
         slots=["label", "return_prop", "sort_prop"],
         params=[],
         example_question="가장 비싼 상품은?",
+    ),
+    "avg_prop": TemplateSpec(
+        template_id="avg_prop",
+        category="aggregate",
+        description="Average of a numeric property",
+        cypher=_AVG_PROP,
+        slots=["label", "prop"],
+        params=[],
+        example_question="전체 주문의 평균 금액은?",
+    ),
+    "review_top_n": TemplateSpec(
+        template_id="review_top_n",
+        category="aggregate",
+        description="Review rating Top N products",
+        cypher=_REVIEW_TOP_N,
+        slots=[],
+        params=["limit"],
+        example_question="리뷰 평점 Top 3 상품은?",
+    ),
+    "shipping_stats": TemplateSpec(
+        template_id="shipping_stats",
+        category="aggregate",
+        description="Shipping status distribution",
+        cypher=_SHIPPING_STATS,
+        slots=[],
+        params=[],
+        example_question="배송 상태별 주문 건수는?",
+    ),
+    "payment_stats": TemplateSpec(
+        template_id="payment_stats",
+        category="aggregate",
+        description="Payment method distribution",
+        cypher=_PAYMENT_STATS,
+        slots=[],
+        params=[],
+        example_question="결제 방법별 통계를 알려주세요",
+    ),
+    "order_shipping": TemplateSpec(
+        template_id="order_shipping",
+        category="traverse",
+        description="Customer order shipping status",
+        cypher=_ORDER_SHIPPING,
+        slots=[],
+        params=["name"],
+        example_question="김민수 주문의 배송 상태는?",
+    ),
+    "order_payment": TemplateSpec(
+        template_id="order_payment",
+        category="traverse",
+        description="Customer order payment method",
+        cypher=_ORDER_PAYMENT,
+        slots=[],
+        params=["name"],
+        example_question="이영희 주문의 결제 방법은?",
+    ),
+    "coupon_orders": TemplateSpec(
+        template_id="coupon_orders",
+        category="traverse",
+        description="Orders using a specific coupon",
+        cypher=_COUPON_ORDERS,
+        slots=[],
+        params=["code"],
+        example_question="WELCOME10 쿠폰을 사용한 주문은?",
+    ),
+    "city_customers": TemplateSpec(
+        template_id="city_customers",
+        category="traverse",
+        description="Customers in a specific city",
+        cypher=_CITY_CUSTOMERS,
+        slots=[],
+        params=["city"],
+        example_question="서울시에 거주하는 고객은?",
+    ),
+    "category_compare": TemplateSpec(
+        template_id="category_compare",
+        category="aggregate",
+        description="Compare order counts between two categories",
+        cypher=_CATEGORY_COMPARE,
+        slots=[],
+        params=["val1", "val2"],
+        example_question="노트북과 오디오 카테고리 비교",
+    ),
+    "supplier_compare": TemplateSpec(
+        template_id="supplier_compare",
+        category="aggregate",
+        description="Compare products from two suppliers",
+        cypher=_SUPPLIER_COMPARE,
+        slots=[],
+        params=["val1", "val2"],
+        example_question="애플코리아와 삼성전자 공급 상품 비교",
     ),
     "custom_q2": TemplateSpec(
         template_id="custom_q2",

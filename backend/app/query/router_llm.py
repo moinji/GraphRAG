@@ -25,6 +25,11 @@ Available templates:
 Current graph schema:
 {schema}
 
+If the schema includes "Transitive properties", a _CLOSURE relationship exists for those types.
+Use the _CLOSURE relationship for ancestor/descendant queries (e.g., PARENT_OF_CLOSURE for all ancestors).
+If "Inverse pairs" are listed, you can traverse relationships in either direction.
+If "Inferred paths" are listed, prefer shorter path templates that use the inferred property.
+
 Respond ONLY with a JSON object:
 {{
   "template_id": "<template_id>",

@@ -12,7 +12,9 @@ import type {
   OntologySpec,
   OntologyUpdateResponse,
   OntologyVersionResponse,
+  OWLExportResponse,
   QueryResponse,
+  SHACLValidationResponse,
   WisdomResponse,
 } from '@/types/ontology';
 import type { GraphData, GraphResetResponse, GraphStats } from '@/types/graph';
@@ -368,5 +370,25 @@ export async function generateDDLFromNL(
     },
     undefined,
     LONG_TIMEOUT_MS,
+  );
+}
+
+// ── OWL API ─────────────────────────────────────────────────────
+
+export async function exportOWL(
+  versionId: number,
+  format: string = 'turtle',
+): Promise<OWLExportResponse> {
+  return request<OWLExportResponse>(
+    `${BASE}/owl/export/${versionId}?fmt=${encodeURIComponent(format)}`,
+  );
+}
+
+export async function validateSHACL(
+  versionId: number,
+): Promise<SHACLValidationResponse> {
+  return request<SHACLValidationResponse>(
+    `${BASE}/owl/validate/${versionId}`,
+    { method: 'POST' },
   );
 }

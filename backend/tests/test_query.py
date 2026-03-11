@@ -29,11 +29,11 @@ async def api_client(_app):
 # ════════════════════════════════════════════════════════════════════
 
 
-def test_registry_has_18_templates():
-    """#1: Registry contains exactly 18 templates."""
+def test_registry_has_28_templates():
+    """#1: Registry contains exactly 28 templates (18 base + 10 extended)."""
     from app.query.template_registry import REGISTRY
 
-    assert len(REGISTRY) == 18
+    assert len(REGISTRY) == 28
 
 
 def test_render_two_hop():

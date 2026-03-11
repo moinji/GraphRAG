@@ -112,7 +112,7 @@ _ENTITY_LABEL_MAP_EN = {
     "supplier": "Supplier", "suppliers": "Supplier",
 }
 _Q8_RE = re.compile(
-    r"총\s*(?P<entity>고객|주문|상품|제품|카테고리|공급업체)\s*수"
+    r"총\s*(?P<entity>고객|주문|상품|제품|카테고리|공급업체)\s*(?:건수|수)"
     r"|(?P<entity2>고객|주문|상품|제품|카테고리|공급업체)(?:는|이|가)?\s*(?:총\s*)?몇\s*(?:명|개|건)",
     re.IGNORECASE,
 )
@@ -189,6 +189,58 @@ _Q12_RE = re.compile(
 )
 _Q12_EN = re.compile(
     r"(?P<target>orders?|products?)\s+(?:per|by|for\s+each)\s+(?P<group>customer|category)",
+    re.IGNORECASE,
+)
+
+
+# ── Extended patterns (Q13–Q20) ──────────────────────────────────
+
+# Q13: "전체 주문의 평균 금액" → avg_prop
+_Q13_RE = re.compile(
+    r"(?:전체\s*)?주문(?:의|.*?)\s*평균\s*(?:금액|가격|결제|금)",
+    re.IGNORECASE,
+)
+
+# Q14: "리뷰 평점 Top N" / "상품별 리뷰 평점 Top N" → review_top_n
+_Q14_RE = re.compile(
+    r"(?:상품별\s*)?(?:리뷰\s*)?평점\s*Top\s*(?P<limit>\d+)"
+    r"|Top\s*(?P<limit2>\d+)\s*(?:리뷰\s*)?평점",
+    re.IGNORECASE,
+)
+
+# Q15: "배송 상태별" / "결제 방법별" → shipping_stats / payment_stats
+_Q15_RE = re.compile(
+    r"(?P<prop>배송\s*상태|결제\s*방법|결제\s*수단)별\s*(?:주문\s*)?(?:건수|수|통계|현황|분포)",
+    re.IGNORECASE,
+)
+
+# Q16: "X 주문의 배송 상태/결제 방법" → order_shipping / order_payment
+_Q16_RE = re.compile(
+    r"(?P<name>\S+?)\s*주문(?:의|[은는])?\s*(?P<prop>배송\s*상태|결제\s*방법|결제\s*수단)",
+    re.IGNORECASE,
+)
+
+# Q17: "X 쿠폰을 사용한 주문" → coupon_orders
+_Q17_RE = re.compile(
+    r"(?P<code>\S+?)\s*쿠폰(?:을|을?\s*)?\s*사용한\s*주문",
+    re.IGNORECASE,
+)
+
+# Q18: "X에 거주하는 고객" → city_customers
+_Q18_RE = re.compile(
+    r"(?P<city>\S+?)(?:시|시에|에)\s*거주하는\s*(?:고객|사람|사용자)",
+    re.IGNORECASE,
+)
+
+# Q19: "X과 Y 카테고리 ... 팔렸" → category_compare
+_Q19_RE = re.compile(
+    r"(?P<a>\S+?)(?:와|과)\s*(?P<b>\S+?)\s*카테고리.*(?:많이|더|비교)\s*(?:팔|주문|비교)?",
+    re.IGNORECASE,
+)
+
+# Q20: "X와 Y 공급 상품 비교" → supplier_compare
+_Q20_RE = re.compile(
+    r"(?P<a>\S+?)(?:와|과)\s*(?P<b>\S+?)\s*(?:공급\s*)?상품\s*비교",
     re.IGNORECASE,
 )
 
@@ -436,6 +488,63 @@ def classify_by_rules(question: str, tenant_id: str | None = None) -> RouteResul
         group_key = m.group("group").lower()
         target = m.group("target").lower()
         return _build_group_count_en(group_key, target)
+
+    # Q16: customer order property (before Q13/Q15 to avoid partial match)
+    m = _Q16_RE.search(question)
+    if m:
+        name = m.group("name")
+        prop = re.sub(r"\s+", " ", m.group("prop")).strip()
+        if "배송" in prop:
+            return ("order_shipping", "cypher_traverse", {}, {"name": name})
+        return ("order_payment", "cypher_traverse", {}, {"name": name})
+
+    # Q14: review/rating Top N (before Q13 avg to avoid overlap)
+    m = _Q14_RE.search(question)
+    if m:
+        limit = int(m.group("limit") or m.group("limit2"))
+        return ("review_top_n", "cypher_agg", {}, {"limit": limit})
+
+    # Q13: average aggregate
+    m = _Q13_RE.search(question)
+    if m:
+        return (
+            "avg_prop",
+            "cypher_agg",
+            {"label": "Order", "prop": "total_amount"},
+            {},
+        )
+
+    # Q15: property group by (shipping/payment stats)
+    m = _Q15_RE.search(question)
+    if m:
+        prop = re.sub(r"\s+", " ", m.group("prop")).strip()
+        if "배송" in prop:
+            return ("shipping_stats", "cypher_agg", {}, {})
+        return ("payment_stats", "cypher_agg", {}, {})
+
+    # Q17: coupon filter
+    m = _Q17_RE.search(question)
+    if m:
+        code = m.group("code")
+        return ("coupon_orders", "cypher_traverse", {}, {"code": code})
+
+    # Q18: city filter
+    m = _Q18_RE.search(question)
+    if m:
+        city = m.group("city")
+        return ("city_customers", "cypher_traverse", {}, {"city": city})
+
+    # Q20: supplier comparison (before Q19 category to avoid overlap)
+    m = _Q20_RE.search(question)
+    if m:
+        a, b = m.group("a"), m.group("b")
+        return ("supplier_compare", "cypher_agg", {}, {"val1": a, "val2": b})
+
+    # Q19: category comparison
+    m = _Q19_RE.search(question)
+    if m:
+        a, b = m.group("a"), m.group("b")
+        return ("category_compare", "cypher_agg", {}, {"val1": a, "val2": b})
 
     # ── Schema-aware generic fallbacks ──────────────────────────────
     schema_result = _try_schema_aware_match(question, tenant_id)

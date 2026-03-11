@@ -211,12 +211,20 @@ def _check_orphan_nodes(ontology: OntologySpec) -> list[QualityIssue]:
     return issues
 
 
+def _is_valid_node_name(name: str) -> bool:
+    """Check if name is valid: PascalCase ASCII or any non-ASCII script (Korean, CJK)."""
+    if not name:
+        return False
+    first_char = name[0]
+    return first_char.isupper() or not first_char.isascii()
+
+
 def _check_naming_conventions(ontology: OntologySpec) -> list[QualityIssue]:
     """Check naming conventions: PascalCase nodes, UPPER_SNAKE relationships."""
     issues: list[QualityIssue] = []
 
     for nt in ontology.node_types:
-        if not nt.name[0].isupper():
+        if not _is_valid_node_name(nt.name):
             issues.append(
                 QualityIssue(
                     severity="warning",

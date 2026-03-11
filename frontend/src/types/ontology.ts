@@ -262,3 +262,26 @@ export interface WisdomResponse {
   latency_ms: number;
   llm_tokens_used: number;
 }
+
+// ── OWL ──────────────────────────────────────────────────────────
+
+export interface OWLExportResponse {
+  content: string;
+  format: string;
+  triple_count: number;
+  class_count: number;
+  property_count: number;
+}
+
+export interface SHACLIssue {
+  severity: string;
+  message: string;
+  details: Record<string, string>;
+}
+
+export interface SHACLValidationResponse {
+  conforms: boolean;
+  issue_count: number;
+  issues: SHACLIssue[];
+  level: string;
+}

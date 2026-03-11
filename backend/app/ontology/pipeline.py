@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 
 from app.db.pg_client import compute_erd_hash, save_version
+from app.config import settings
 from app.evaluation.auto_golden import generate_golden_from_ontology, is_ecommerce_domain
 from app.evaluation.evaluator import evaluate
 from app.evaluation.golden_ecommerce import (
@@ -78,6 +79,24 @@ def generate_ontology(
             logger.warning("LLM enrichment skipped: %s", e.detail)
             # Keep baseline, stage stays "fk_only"
 
+    # ── Stage 2.5 / 2.7: OWL Reasoning (optional) ───────────────
+    owl_axiom_count: int | None = None
+    if settings.enable_owl:
+        try:
+            from app.owl.converter import ontology_to_owl
+            from app.owl.reasoner import run_reasoning
+
+            owl_graph = ontology_to_owl(
+                final_ontology, domain=domain_hint.name if domain_hint else None,
+            )
+            owl_result = run_reasoning(
+                owl_graph, domain=domain_hint.name if domain_hint else None,
+            )
+            owl_axiom_count = owl_result.axioms_applied
+            logger.info("OWL reasoning: +%d inferred triples", owl_result.inferred_count)
+        except Exception as e:
+            logger.warning("OWL reasoning skipped: %s", e)
+
     # ── Stage 3: Quality validation ────────────────────────────────
     warnings: list[str] = []
     quality_report = check_quality(final_ontology)
@@ -135,4 +154,5 @@ def generate_ontology(
         warnings=warnings,
         quality_score=quality_report.score,
         detected_domain=domain_hint.name if domain_hint else None,
+        owl_axiom_count=owl_axiom_count,
     )

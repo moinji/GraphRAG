@@ -114,6 +114,7 @@ class OntologyGenerateResponse(BaseModel):
     warnings: list[str] = []
     quality_score: float | None = None
     detected_domain: str | None = None
+    owl_axiom_count: int | None = None
 
 
 # ── Ontology Version API ──────────────────────────────────────────
@@ -384,6 +385,23 @@ class DocumentSource(BaseModel):
     relevance_score: float
     page_num: int | None = None
     chunk_index: int = 0
+
+
+# ── OWL Export ────────────────────────────────────────────────────
+
+class OWLExportResponse(BaseModel):
+    content: str
+    format: str = "turtle"
+    triple_count: int = 0
+    class_count: int = 0
+    property_count: int = 0
+
+
+class SHACLValidationResponse(BaseModel):
+    conforms: bool
+    issue_count: int = 0
+    issues: list[dict] = []
+    level: str = "tbox"  # TBox schema consistency check
 
 
 class WisdomResponse(BaseModel):

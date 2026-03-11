@@ -193,6 +193,44 @@ def run_kg_build(
         except Exception:
             pass
 
+        # 5.5. OWL Materialization (best-effort)
+        if settings.enable_owl:
+            try:
+                from app.db.neo4j_client import get_driver
+                from app.owl.materializer import materialize_transitive, materialize_chain_fallback
+                from app.owl.axiom_registry import get_axioms
+                from app.owl.converter import ontology_to_owl
+                from app.owl.reasoner import run_reasoning
+
+                _driver = get_driver()
+                mat_results = materialize_transitive(ontology, driver=_driver, tenant_id=tenant_id)
+                mat_total = sum(mat_results.values())
+
+                # propertyChain fallback
+                detected_domain = None
+                try:
+                    from app.ontology.domain_hints import detect_domain
+                    dh = detect_domain(erd)
+                    detected_domain = dh.name if dh else None
+                except Exception:
+                    pass
+
+                if detected_domain:
+                    owl_g = ontology_to_owl(ontology, domain=detected_domain)
+                    owl_result = run_reasoning(owl_g, domain=detected_domain)
+                    if owl_result.chain_fallback_used:
+                        chain_axioms = [a for a in get_axioms(detected_domain) if a.axiom_type == "propertyChain"]
+                        chain_results = materialize_chain_fallback(_driver, chain_axioms, tenant_id)
+                        mat_total += sum(chain_results.values())
+
+                # stats에 물리화된 관계 수 반영
+                stats["relationships"] = stats.get("relationships", 0) + mat_total
+
+                if mat_total > 0:
+                    logger.info("OWL materialization: %d closure/chain edges created", mat_total)
+            except Exception:
+                logger.warning("OWL materialization failed — non-fatal", exc_info=True)
+
         # 6. Success
         duration = time.monotonic() - start_time
         completed_str = datetime.now(timezone.utc).isoformat()

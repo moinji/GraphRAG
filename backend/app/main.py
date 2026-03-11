@@ -27,6 +27,7 @@ from app.exceptions import (
     LLMEnrichmentError,
     LocalSearchError,
     MappingValidationError,
+    OWLReasoningError,
     OntologyGenerationError,
     QueryRoutingError,
     VersionConflictError,
@@ -43,13 +44,14 @@ from app.exceptions import (
     llm_enrichment_error_handler,
     local_search_error_handler,
     mapping_validation_error_handler,
+    owl_reasoning_error_handler,
     ontology_generation_error_handler,
     query_routing_error_handler,
     version_conflict_handler,
     version_not_found_handler,
     wisdom_error_handler,
 )
-from app.routers import csv_upload, ddl, documents, evaluation, graph, health, kg_build, mapping, ontology, ontology_versions, query, sse, wisdom
+from app.routers import csv_upload, ddl, documents, evaluation, graph, health, kg_build, mapping, ontology, ontology_versions, owl, query, sse, wisdom
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +99,7 @@ def create_app() -> FastAPI:
     application.add_exception_handler(DocumentValidationError, document_validation_error_handler)
     application.add_exception_handler(DocumentNotFoundError, document_not_found_handler)
     application.add_exception_handler(EmbeddingError, embedding_error_handler)
+    application.add_exception_handler(OWLReasoningError, owl_reasoning_error_handler)
 
     # Routers
     application.include_router(health.router)
@@ -112,6 +115,7 @@ def create_app() -> FastAPI:
     application.include_router(wisdom.router)
     application.include_router(sse.router)
     application.include_router(documents.router)
+    application.include_router(owl.router)
 
     # Startup: ensure PG table + run migrations
     @application.on_event("startup")

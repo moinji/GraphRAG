@@ -54,6 +54,12 @@ class Settings(BaseSettings):
     csv_max_file_size_mb: int = 50
     csv_max_files: int = 50
 
+    # OWL Reasoner
+    enable_owl: bool = False
+    owl_base_uri: str = "http://graphrag.io/ontology#"
+    owl_max_inferred_triples: int = 500
+    owl_reasoning_timeout_sec: int = 30
+
     # Document Processing (v5.0)
     embedding_model: str = "text-embedding-3-small"
     embedding_batch_size: int = 100

@@ -101,7 +101,15 @@ def get_graph_schema(tenant_id: str | None = None) -> dict:
                     if props:
                         schema["relationship_properties"][rel_type] = props
 
+        # OWL enrichment (enable_owl=True일 때만)
         if schema["node_labels"]:
+            try:
+                from app.config import settings as _settings
+                if _settings.enable_owl:
+                    schema = _enrich_with_owl(schema, tenant_id)
+            except Exception:
+                logger.debug("OWL enrichment skipped", exc_info=True)
+
             _schema_cache[tenant_id] = schema
             _schema_cache_ts[tenant_id] = now
             logger.debug(
@@ -150,4 +158,77 @@ def format_schema_for_prompt(schema: dict) -> str:
         for rel_type, props in schema["relationship_properties"].items():
             lines.append(f"  {rel_type}: {', '.join(props)}")
 
+    # OWL 메타데이터 (enable_owl=True일 때만 존재)
+    if schema.get("transitive_properties"):
+        lines.append("\nTransitive properties: " + ", ".join(schema["transitive_properties"]))
+
+    if schema.get("inverse_pairs"):
+        lines.append("\nInverse pairs:")
+        for a, b in schema["inverse_pairs"]:
+            lines.append(f"  {a} <-> {b}")
+
+    if schema.get("inferred_paths"):
+        lines.append("\nInferred paths (property chains):")
+        for chain in schema["inferred_paths"]:
+            lines.append(f"  {' -> '.join(chain)}")
+
+    if schema.get("class_hierarchy"):
+        lines.append("\nClass hierarchy:")
+        for cls, parents in schema["class_hierarchy"].items():
+            lines.append(f"  {cls} subClassOf {', '.join(parents)}")
+
     return "\n".join(lines)
+
+
+def _enrich_with_owl(schema: dict, tenant_id: str | None) -> dict:
+    """최신 approved 온톨로지에서 OWL Graph를 생성하여 스키마 enrichment.
+
+    설계 결정: PG에서 최신 approved 버전을 조회하여 OWL Graph를 만든다.
+    approved 버전이 없으면 enrichment를 건너뛴다.
+    """
+    try:
+        from app.db.pg_client import _get_conn
+        from app.models.schemas import OntologySpec
+        from app.owl.converter import ontology_to_owl
+        from app.owl.reasoner import run_reasoning
+        from app.owl.schema_enricher import enrich_schema_with_owl
+        from app.tenant import tenant_db_id
+
+        tid = tenant_db_id(tenant_id)
+        with _get_conn() as conn:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT ontology_json FROM ontology_versions "
+                        "WHERE status = 'approved' AND tenant_id = %s "
+                        "ORDER BY id DESC LIMIT 1",
+                        (tid,),
+                    )
+                    row = cur.fetchone()
+        if row is None:
+            return schema
+
+        import json
+        ontology = OntologySpec(**json.loads(row[0]) if isinstance(row[0], str) else row[0])
+
+        # 도메인 감지
+        domain_name = None
+        try:
+            from app.owl.axiom_registry import _AXIOM_REGISTRY
+            node_names = {nt.name.lower() for nt in ontology.node_types}
+            if node_names & {"customer", "product", "order"}:
+                domain_name = "ecommerce"
+            elif node_names & {"student", "course", "instructor"}:
+                domain_name = "education"
+            elif node_names & {"policyholder", "policy", "claim"}:
+                domain_name = "insurance"
+        except Exception:
+            pass
+
+        owl_graph = ontology_to_owl(ontology, domain=domain_name)
+        run_reasoning(owl_graph, domain=domain_name)
+        return enrich_schema_with_owl(schema, owl_graph)
+
+    except Exception:
+        logger.debug("OWL schema enrichment failed — returning base schema", exc_info=True)
+        return schema

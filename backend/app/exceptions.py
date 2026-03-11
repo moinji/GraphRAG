@@ -241,3 +241,19 @@ async def embedding_error_handler(
     _request: Request, exc: EmbeddingError
 ) -> JSONResponse:
     return JSONResponse(status_code=502, content={"detail": exc.detail})
+
+
+# ── OWL Reasoner ────────────────────────────────────────────────────
+
+class OWLReasoningError(Exception):
+    """Raised when OWL reasoning or SHACL validation fails (non-fatal)."""
+
+    def __init__(self, detail: str = "OWL reasoning failed"):
+        self.detail = detail
+        super().__init__(detail)
+
+
+async def owl_reasoning_error_handler(
+    _request: Request, exc: OWLReasoningError
+) -> JSONResponse:
+    return JSONResponse(status_code=502, content={"detail": exc.detail})

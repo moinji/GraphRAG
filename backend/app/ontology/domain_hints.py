@@ -42,6 +42,9 @@ class DomainHint:
     # Minimum overlap count to detect this domain
     detection_threshold: int = 6
 
+    # OWL axiom 정의 (Phase 2에서 데이터 추가)
+    owl_axioms: list[tuple] = field(default_factory=list)
+
 
 # ── E-commerce domain ────────────────────────────────────────────
 
@@ -107,6 +110,11 @@ Do not add speculative edges without clear query value.
         "order_items", "wishlists", "shipping",
     },
     detection_threshold=6,
+    owl_axioms=[
+        ("PARENT_OF", "TransitiveProperty", "", "Category", "Category"),
+        ("PLACED", "inverseOf", "PLACED_BY"),
+        ("CONTAINS", "inverseOf", "CONTAINED_IN"),
+    ],
 )
 
 
@@ -171,7 +179,11 @@ Focus on relationships that enable multi-hop queries like:
         "enrollments", "assignments", "grades", "semesters",
         "classrooms", "prerequisites", "certificates",
     },
-    detection_threshold=4,
+    detection_threshold=5,
+    owl_axioms=[
+        ("REQUIRES", "TransitiveProperty", "", "Course", "Course"),
+        ("TEACHES", "inverseOf", "TAUGHT_BY"),
+    ],
 )
 
 
@@ -246,6 +258,9 @@ Focus on relationships that enable multi-hop queries like:
         "claim_items", "clauses",
     },
     detection_threshold=4,
+    owl_axioms=[
+        ("COVERS", "inverseOf", "COVERED_BY"),
+    ],
 )
 
 
