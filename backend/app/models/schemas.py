@@ -229,7 +229,7 @@ class QueryResult(BaseModel):
 
 class QueryRequest(BaseModel):
     question: str
-    mode: str = "a"  # "a" | "b"
+    mode: str = "a"  # "a" | "b" | "c"
 
 
 class QueryResponse(BaseModel):
@@ -247,6 +247,7 @@ class QueryResponse(BaseModel):
     latency_ms: int | None = None
     cached: bool = False
     related_node_ids: list[str] = []
+    document_sources: list[DocumentSource] = []  # Mode C: document evidence
 
 
 # ── QA Evaluation ────────────────────────────────────────────────
@@ -350,6 +351,39 @@ class DIKWLayer(BaseModel):
 
 class WisdomRequest(BaseModel):
     question: str
+
+
+# ── Document Processing (v5.0) ───────────────────────────────────────
+
+class DocumentResponse(BaseModel):
+    document_id: int
+    filename: str
+    file_type: str
+    file_size: int
+    page_count: int = 0
+    chunk_count: int = 0
+    status: str = "processing"  # processing | ready | failed
+    created_at: str = ""
+
+
+class DocumentUploadResponse(BaseModel):
+    accepted: list[dict] = []
+    errors: list[str] = []
+    total_queued: int = 0
+
+
+class DocumentListResponse(BaseModel):
+    documents: list[DocumentResponse] = []
+    total: int = 0
+
+
+class DocumentSource(BaseModel):
+    document_id: int
+    filename: str
+    chunk_text: str
+    relevance_score: float
+    page_num: int | None = None
+    chunk_index: int = 0
 
 
 class WisdomResponse(BaseModel):

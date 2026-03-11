@@ -192,3 +192,52 @@ async def wisdom_error_handler(
     _request: Request, exc: WisdomError
 ) -> JSONResponse:
     return JSONResponse(status_code=502, content={"detail": exc.detail})
+
+
+# ── Document Processing (v5.0) ───────────────────────────────────────
+
+class DocumentValidationError(Exception):
+    """Raised when document upload validation fails."""
+
+    def __init__(self, detail: str = "Document validation failed", errors: list[str] | None = None):
+        self.detail = detail
+        self.errors = errors or []
+        super().__init__(detail)
+
+
+async def document_validation_error_handler(
+    _request: Request, exc: DocumentValidationError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.detail, "errors": exc.errors},
+    )
+
+
+class DocumentNotFoundError(Exception):
+    """Raised when a document is not found."""
+
+    def __init__(self, document_id: int):
+        self.detail = f"Document {document_id} not found"
+        self.document_id = document_id
+        super().__init__(self.detail)
+
+
+async def document_not_found_handler(
+    _request: Request, exc: DocumentNotFoundError
+) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": exc.detail})
+
+
+class EmbeddingError(Exception):
+    """Raised when embedding generation fails."""
+
+    def __init__(self, detail: str = "Embedding generation failed"):
+        self.detail = detail
+        super().__init__(detail)
+
+
+async def embedding_error_handler(
+    _request: Request, exc: EmbeddingError
+) -> JSONResponse:
+    return JSONResponse(status_code=502, content={"detail": exc.detail})

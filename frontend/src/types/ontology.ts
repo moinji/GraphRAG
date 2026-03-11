@@ -181,6 +181,15 @@ export interface CSVUploadResponse {
 
 // ── Query API ──────────────────────────────────────────────────
 
+export interface DocumentSource {
+  document_id: number;
+  filename: string;
+  chunk_text: string;
+  relevance_score: number;
+  page_num: number | null;
+  chunk_index: number;
+}
+
 export interface QueryResponse {
   question: string;
   answer: string;
@@ -196,6 +205,31 @@ export interface QueryResponse {
   latency_ms: number | null;
   cached: boolean;
   related_node_ids: string[];
+  document_sources: DocumentSource[];
+}
+
+// ── Document Management (v5.0) ──────────────────────────────────
+
+export interface DocumentInfo {
+  document_id: number;
+  filename: string;
+  file_type: string;
+  file_size: number;
+  page_count: number;
+  chunk_count: number;
+  status: 'processing' | 'ready' | 'failed';
+  created_at: string;
+}
+
+export interface DocumentUploadResponse {
+  accepted: { filename: string; size: number; status: string }[];
+  errors: string[];
+  total_queued: number;
+}
+
+export interface DocumentListResponse {
+  documents: DocumentInfo[];
+  total: number;
 }
 
 export interface ChatMessage {

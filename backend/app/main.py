@@ -20,6 +20,9 @@ from app.exceptions import (
     CSVValidationError,
     CypherExecutionError,
     DDLParseError,
+    DocumentNotFoundError,
+    DocumentValidationError,
+    EmbeddingError,
     FileTooLargeError,
     LLMEnrichmentError,
     LocalSearchError,
@@ -33,6 +36,9 @@ from app.exceptions import (
     csv_validation_error_handler,
     cypher_execution_error_handler,
     ddl_parse_error_handler,
+    document_not_found_handler,
+    document_validation_error_handler,
+    embedding_error_handler,
     file_too_large_handler,
     llm_enrichment_error_handler,
     local_search_error_handler,
@@ -43,7 +49,7 @@ from app.exceptions import (
     version_not_found_handler,
     wisdom_error_handler,
 )
-from app.routers import csv_upload, ddl, evaluation, graph, health, kg_build, mapping, ontology, ontology_versions, query, sse, wisdom
+from app.routers import csv_upload, ddl, documents, evaluation, graph, health, kg_build, mapping, ontology, ontology_versions, query, sse, wisdom
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +94,9 @@ def create_app() -> FastAPI:
     application.add_exception_handler(CSVValidationError, csv_validation_error_handler)
     application.add_exception_handler(MappingValidationError, mapping_validation_error_handler)
     application.add_exception_handler(WisdomError, wisdom_error_handler)
+    application.add_exception_handler(DocumentValidationError, document_validation_error_handler)
+    application.add_exception_handler(DocumentNotFoundError, document_not_found_handler)
+    application.add_exception_handler(EmbeddingError, embedding_error_handler)
 
     # Routers
     application.include_router(health.router)
@@ -102,6 +111,7 @@ def create_app() -> FastAPI:
     application.include_router(mapping.router)
     application.include_router(wisdom.router)
     application.include_router(sse.router)
+    application.include_router(documents.router)
 
     # Startup: ensure PG table + run migrations
     @application.on_event("startup")

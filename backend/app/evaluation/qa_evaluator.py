@@ -145,6 +145,37 @@ def run_evaluation_b(
     return results
 
 
+def run_evaluation_c(
+    pairs: list[QAGoldenPair],
+    query_fn=None,
+) -> list[QASingleResult]:
+    """Run all pairs through C안 pipeline (hybrid search). Uses mock if query_fn provided."""
+    if query_fn is None:
+        from app.query.pipeline import run_query
+        query_fn = lambda q: run_query(q, mode="c")
+
+    results: list[QASingleResult] = []
+    for pair in pairs:
+        try:
+            response = query_fn(pair.question)
+            result = evaluate_single(pair, response)
+        except Exception as e:
+            logger.warning("C안 evaluation failed for %s: %s", pair.id, e)
+            result = QASingleResult(
+                qa_id=pair.id,
+                mode="c",
+                question=pair.question,
+                answer="",
+                keyword_score=0.0,
+                entity_score=0.0,
+                latency_ms=0,
+                success=False,
+                error=str(e),
+            )
+        results.append(result)
+    return results
+
+
 def build_comparison(
     a_results: list[QASingleResult],
     b_results: list[QASingleResult],

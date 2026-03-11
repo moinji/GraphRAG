@@ -54,6 +54,15 @@ class Settings(BaseSettings):
     csv_max_file_size_mb: int = 50
     csv_max_files: int = 50
 
+    # Document Processing (v5.0)
+    embedding_model: str = "text-embedding-3-small"
+    embedding_batch_size: int = 100
+    doc_max_file_size_mb: int = 50
+    doc_max_files: int = 10
+    doc_chunk_size: int = 1000       # characters
+    doc_chunk_overlap: int = 200     # characters
+    doc_chunk_strategy: str = "recursive"  # recursive | fixed | sentence
+
     # App
     port: int = 8080  # Cloud Run uses PORT env var
     app_env: str = "development"

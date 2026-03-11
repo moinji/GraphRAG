@@ -19,5 +19,5 @@ def query(req: QueryRequest, request: Request) -> QueryResponse:
     question = req.question.strip()
     if not question:
         raise QueryRoutingError("Question cannot be empty")
-    mode = req.mode if req.mode in ("a", "b") else "a"
+    mode = req.mode if req.mode in ("a", "b", "c") else "a"
     return run_query(question, mode=mode, tenant_id=tenant_id)

@@ -32,6 +32,12 @@ def run_query(
     """Execute the full Q&A pipeline for a single question."""
     start_time = time.time()
 
+    # C안: hybrid search pipeline (vector + KG)
+    if mode == "c":
+        from app.query.hybrid_search import run_hybrid_query
+
+        return run_hybrid_query(question, tenant_id=tenant_id)
+
     # B안: local search pipeline
     if mode == "b":
         from app.query.local_search import run_local_query

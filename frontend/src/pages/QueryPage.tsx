@@ -7,7 +7,7 @@ import { DEMO_QUESTIONS, DEMO_QUESTIONS_EN, WISDOM_DEMO_QUESTIONS, SSE_STREAM_TI
 import DIKWTimeline from '@/components/wisdom/DIKWTimeline';
 import type { ChatMessage, QueryResponse } from '@/types/ontology';
 
-type Mode = 'a' | 'b' | 'w';
+type Mode = 'a' | 'b' | 'c' | 'w';
 
 let _msgSeq = 0;
 function msgId(): string {
@@ -52,7 +52,17 @@ export default function QueryPage({ onBack }: QueryPageProps) {
     setSending(true);
 
     try {
-      if (mode === 'w') {
+      if (mode === 'c') {
+        // Mode C: hybrid search (vector + KG)
+        const data = await sendQuery(question, 'c');
+        const assistantMsg: ChatMessage = {
+          id: msgId(), role: 'assistant',
+          content: data.answer,
+          data,
+        };
+        setMessages((prev) => [...prev, assistantMsg]);
+        setSending(false);
+      } else if (mode === 'w') {
         const wisdomData = await sendWisdomQuery(question);
         const assistantMsg: ChatMessage = {
           id: msgId(), role: 'assistant',
@@ -157,6 +167,18 @@ export default function QueryPage({ onBack }: QueryPageProps) {
               }`}
             >
               B 로컬
+            </button>
+            <button
+              onClick={() => setMode('c')}
+              role="radio"
+              aria-checked={mode === 'c'}
+              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                mode === 'c'
+                  ? 'bg-purple-600 text-white'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              C 하이브리드
             </button>
             <button
               onClick={() => setMode('w')}
@@ -311,6 +333,7 @@ function AssistantDetail({ data }: { data: QueryResponse }) {
   const [showCypher, setShowCypher] = useState(false);
   const [showPaths, setShowPaths] = useState(false);
   const [showSubgraph, setShowSubgraph] = useState(false);
+  const [showDocSources, setShowDocSources] = useState(false);
 
   return (
     <div className="mt-2 space-y-2">
@@ -320,12 +343,14 @@ function AssistantDetail({ data }: { data: QueryResponse }) {
         <Badge
           variant="outline"
           className={`text-xs ${
-            data.mode === 'b'
+            data.mode === 'c'
+              ? 'border-purple-500 text-purple-600'
+              : data.mode === 'b'
               ? 'border-orange-500 text-orange-600'
               : 'border-blue-500 text-blue-600'
           }`}
         >
-          {data.mode === 'b' ? 'B 로컬' : 'A 템플릿'}
+          {data.mode === 'c' ? 'C 하이브리드' : data.mode === 'b' ? 'B 로컬' : 'A 템플릿'}
         </Badge>
         {data.template_id && (
           <Badge variant="secondary" className="text-xs">
@@ -416,6 +441,33 @@ function AssistantDetail({ data }: { data: QueryResponse }) {
                 </li>
               ))}
             </ul>
+          )}
+        </div>
+      )}
+
+      {/* Document sources (Mode C) */}
+      {data.document_sources && data.document_sources.length > 0 && (
+        <div>
+          <button
+            onClick={() => setShowDocSources(!showDocSources)}
+            aria-expanded={showDocSources}
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            {showDocSources ? '\u25BC' : '\u25B6'} 문서 출처 ({data.document_sources.length})
+          </button>
+          {showDocSources && (
+            <div className="mt-1 space-y-1">
+              {data.document_sources.map((src, i) => (
+                <div key={i} className="rounded bg-purple-50 border border-purple-200 p-2 text-xs">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge className="bg-purple-600 text-white text-[10px]">{src.filename}</Badge>
+                    {src.page_num && <span className="text-muted-foreground">p.{src.page_num}</span>}
+                    <span className="text-muted-foreground">관련도: {(src.relevance_score * 100).toFixed(0)}%</span>
+                  </div>
+                  <p className="text-muted-foreground line-clamp-2">{src.chunk_text}</p>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}

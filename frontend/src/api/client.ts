@@ -1,5 +1,8 @@
 import type {
   CSVUploadResponse,
+  DocumentInfo,
+  DocumentListResponse,
+  DocumentUploadResponse,
   ERDSchema,
   KGBuildResponse,
   MappingGenerateResponse,
@@ -318,6 +321,39 @@ export async function getMappingPreview(
   versionId: number,
 ): Promise<MappingPreview> {
   return request<MappingPreview>(`${BASE}/mapping/${versionId}/preview`);
+}
+
+// ── Document Management API (v5.0) ──────────────────────────────
+
+/** Upload document files for processing. */
+export async function uploadDocuments(
+  files: File[],
+): Promise<DocumentUploadResponse> {
+  const form = new FormData();
+  for (const file of files) {
+    form.append('files', file);
+  }
+  return request<DocumentUploadResponse>(`${BASE}/documents/upload`, {
+    method: 'POST',
+    body: form,
+  });
+}
+
+/** List all documents for the current tenant. */
+export async function listDocuments(): Promise<DocumentListResponse> {
+  return request<DocumentListResponse>(`${BASE}/documents`);
+}
+
+/** Get a single document by ID. */
+export async function getDocument(id: number): Promise<DocumentInfo> {
+  return request<DocumentInfo>(`${BASE}/documents/${id}`);
+}
+
+/** Delete a document and its chunks. */
+export async function deleteDocument(id: number): Promise<{ detail: string }> {
+  return request<{ detail: string }>(`${BASE}/documents/${id}`, {
+    method: 'DELETE',
+  });
 }
 
 export async function generateDDLFromNL(

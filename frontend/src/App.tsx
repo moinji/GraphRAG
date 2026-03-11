@@ -7,6 +7,7 @@ import type { ERDSchema, OntologyGenerateResponse } from '@/types/ontology';
 
 const QueryPage = lazy(() => import('@/pages/QueryPage'));
 const ExplorePage = lazy(() => import('@/pages/ExplorePage'));
+const DocumentsPage = lazy(() => import('@/pages/DocumentsPage'));
 
 const Loading = () => (
   <div className="flex items-center justify-center h-40 text-muted-foreground">로딩 중...</div>
@@ -67,6 +68,16 @@ function App() {
               </button>
             )}
             <button
+              onClick={() => navigate('/documents')}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                location.pathname === '/documents'
+                  ? 'bg-purple-600 text-white'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+              }`}
+            >
+              문서 관리
+            </button>
+            <button
               onClick={() => navigate('/explore')}
               className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                 isExplore
@@ -109,6 +120,14 @@ function App() {
             element={
               <Suspense fallback={<Loading />}>
                 <QueryPage onBack={handleBackToReview} />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/documents"
+            element={
+              <Suspense fallback={<Loading />}>
+                <DocumentsPage onBack={() => navigate(-1)} onGoToQuery={handleGoToQuery} />
               </Suspense>
             }
           />
