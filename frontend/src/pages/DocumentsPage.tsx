@@ -105,20 +105,26 @@ export default function DocumentsPage({ onBack, onGoToQuery }: DocumentsPageProp
         <p className="text-sm text-muted-foreground mb-3">
           PDF, DOCX, Markdown, HTML, TXT 파일을 업로드하세요
         </p>
-        <label className="inline-block">
+        <label className="inline-block cursor-pointer">
           <input
             type="file"
             multiple
             accept={ACCEPTED_TYPES}
             onChange={handleUpload}
             disabled={uploading}
-            className="hidden"
+            aria-label="문서 파일 선택"
+            className="sr-only"
           />
-          <span className={`inline-flex items-center px-4 py-2 rounded-md text-sm font-medium cursor-pointer transition-colors ${
-            uploading
-              ? 'bg-muted text-muted-foreground cursor-not-allowed'
-              : 'bg-primary text-primary-foreground hover:bg-primary/90'
-          }`}>
+          <span
+            role="button"
+            tabIndex={0}
+            aria-busy={uploading}
+            className={`inline-flex items-center px-4 py-2 rounded-md text-sm font-medium cursor-pointer transition-colors ${
+              uploading
+                ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                : 'bg-primary text-primary-foreground hover:bg-primary/90'
+            }`}
+          >
             {uploading ? '업로드 중...' : '파일 선택'}
           </span>
         </label>
@@ -126,12 +132,12 @@ export default function DocumentsPage({ onBack, onGoToQuery }: DocumentsPageProp
 
       {/* Messages */}
       {successMsg && (
-        <div className="rounded-md bg-green-50 border border-green-200 p-3 text-sm text-green-800">
+        <div role="status" aria-live="polite" className="rounded-md bg-green-50 border border-green-200 p-3 text-sm text-green-800">
           {successMsg}
         </div>
       )}
       {errors.length > 0 && (
-        <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive space-y-1">
+        <div role="alert" className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive space-y-1">
           {errors.map((err, i) => (
             <p key={i}>{err}</p>
           ))}
@@ -145,7 +151,7 @@ export default function DocumentsPage({ onBack, onGoToQuery }: DocumentsPageProp
         </p>
       ) : (
         <div className="rounded-lg border overflow-hidden">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm" aria-label="문서 목록">
             <thead className="bg-muted/50">
               <tr>
                 <th className="text-left px-4 py-2 font-medium">파일명</th>
@@ -177,6 +183,7 @@ export default function DocumentsPage({ onBack, onGoToQuery }: DocumentsPageProp
                   <td className="px-4 py-2 text-right">
                     <button
                       onClick={() => handleDelete(doc.document_id)}
+                      aria-label={`${doc.filename} 삭제`}
                       className="text-xs text-destructive hover:text-destructive/80"
                     >
                       삭제
@@ -205,7 +212,7 @@ function StatusBadge({ status }: { status: string }) {
     return <Badge className="bg-green-600 text-white text-xs">완료</Badge>;
   }
   if (status === 'processing') {
-    return <Badge className="bg-yellow-500 text-white text-xs animate-pulse">처리중</Badge>;
+    return <Badge className="bg-yellow-500 text-white text-xs animate-pulse" aria-label="처리 진행 중">처리중</Badge>;
   }
   return <Badge variant="destructive" className="text-xs">실패</Badge>;
 }

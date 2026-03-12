@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 const STORAGE_KEY = 'graphrag_onboarding_done';
 
@@ -28,6 +28,7 @@ const STEPS = [
 export default function OnboardingTour() {
   const [visible, setVisible] = useState(false);
   const [step, setStep] = useState(0);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!localStorage.getItem(STORAGE_KEY)) {
@@ -35,10 +36,30 @@ export default function OnboardingTour() {
     }
   }, []);
 
-  function dismiss() {
+  // Focus the dialog when it becomes visible
+  useEffect(() => {
+    if (visible) {
+      dialogRef.current?.focus();
+    }
+  }, [visible, step]);
+
+  const dismiss = useCallback(() => {
     localStorage.setItem(STORAGE_KEY, '1');
     setVisible(false);
-  }
+  }, []);
+
+  // Keyboard navigation: Escape to dismiss, Arrow keys to navigate
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      dismiss();
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      setStep((s) => Math.min(s + 1, STEPS.length - 1));
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      setStep((s) => Math.max(s - 1, 0));
+    }
+  }, [dismiss]);
 
   if (!visible) return null;
 
@@ -51,17 +72,27 @@ export default function OnboardingTour() {
       <div
         className="fixed inset-0 bg-black/40 z-50"
         onClick={dismiss}
+        aria-hidden="true"
       />
       {/* Dialog */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-background rounded-xl shadow-lg border max-w-md w-full p-6 space-y-4">
+        <div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`온보딩 가이드: ${current.title}`}
+          tabIndex={-1}
+          onKeyDown={handleKeyDown}
+          className="bg-background rounded-xl shadow-lg border max-w-md w-full p-6 space-y-4 outline-none"
+        >
           {/* Step indicator */}
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-muted-foreground" aria-live="polite">
               {step + 1} / {STEPS.length}
             </span>
             <button
               onClick={dismiss}
+              aria-label="온보딩 건너뛰기"
               className="text-xs text-muted-foreground hover:text-foreground"
             >
               건너뛰기 (Skip)
@@ -69,10 +100,13 @@ export default function OnboardingTour() {
           </div>
 
           {/* Progress dots */}
-          <div className="flex gap-1.5 justify-center">
-            {STEPS.map((_, i) => (
+          <div className="flex gap-1.5 justify-center" role="group" aria-label="진행 단계">
+            {STEPS.map((s, i) => (
               <div
                 key={i}
+                role="presentation"
+                aria-current={i === step ? 'step' : undefined}
+                aria-label={`${i + 1}단계: ${s.title}`}
                 className={`h-1.5 rounded-full transition-all ${
                   i === step ? 'w-6 bg-primary' : 'w-1.5 bg-muted-foreground/30'
                 }`}
@@ -95,6 +129,7 @@ export default function OnboardingTour() {
             {step > 0 && (
               <button
                 onClick={() => setStep(step - 1)}
+                aria-label="이전 단계"
                 className="px-4 py-2 rounded-lg text-sm border hover:bg-muted transition-colors"
               >
                 이전
@@ -103,6 +138,7 @@ export default function OnboardingTour() {
             {isLast ? (
               <button
                 onClick={dismiss}
+                aria-label="온보딩 완료 후 시작"
                 className="px-4 py-2 rounded-lg text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
               >
                 시작하기
@@ -110,6 +146,7 @@ export default function OnboardingTour() {
             ) : (
               <button
                 onClick={() => setStep(step + 1)}
+                aria-label="다음 단계"
                 className="px-4 py-2 rounded-lg text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
               >
                 다음
