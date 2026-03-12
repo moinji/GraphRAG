@@ -1,5 +1,6 @@
 import { useState, lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import UploadPage from '@/pages/UploadPage';
 import ReviewPage from '@/pages/ReviewPage';
 import OnboardingTour from '@/components/OnboardingTour';
@@ -91,6 +92,7 @@ function App() {
         </div>
       </header>
       <main id="main-content" className={isExplore ? '' : 'container mx-auto px-4 py-8'}>
+        <ErrorBoundary>
         <Routes>
           <Route
             path="/"
@@ -141,6 +143,7 @@ function App() {
           />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </ErrorBoundary>
       </main>
     </div>
   );

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,7 +28,6 @@ export default function UploadPage({ onGenerated, onAutoComplete }: UploadPagePr
   const [erd, setErd] = useState<ERDSchema | null>(null);
   const [includeLlm, setIncludeLlm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
   const [autoStep, setAutoStep] = useState<string | null>(null);
   const [nlInput, setNlInput] = useState('');
@@ -43,14 +43,13 @@ export default function UploadPage({ onGenerated, onAutoComplete }: UploadPagePr
 
   async function handleLoadExample(key: string) {
     setExampleLoading(key);
-    setError(null);
     try {
       const result = await loadDomainExample(key);
       setErd(result.erd);
       setGeneratedDDL(result.ddl);
       setExpandedTable(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load example');
+      toast.error(e instanceof Error ? e.message : 'Failed to load example');
     } finally {
       setExampleLoading(null);
     }
@@ -69,12 +68,11 @@ export default function UploadPage({ onGenerated, onAutoComplete }: UploadPagePr
   async function handleUpload() {
     if (!file) return;
     setLoading(true);
-    setError(null);
     try {
       const result = await uploadDDL(file);
       setErd(result);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Upload failed');
+      toast.error(e instanceof Error ? e.message : 'Upload failed');
     } finally {
       setLoading(false);
     }
@@ -83,12 +81,11 @@ export default function UploadPage({ onGenerated, onAutoComplete }: UploadPagePr
   async function handleGenerate() {
     if (!erd) return;
     setLoading(true);
-    setError(null);
     try {
       const result = await generateOntology(erd, !includeLlm, domain || undefined);
       onGenerated(result, erd);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Generation failed');
+      toast.error(e instanceof Error ? e.message : 'Generation failed');
     } finally {
       setLoading(false);
     }
@@ -97,7 +94,6 @@ export default function UploadPage({ onGenerated, onAutoComplete }: UploadPagePr
   async function handleNLGenerate() {
     if (!nlInput.trim()) return;
     setNlGenerating(true);
-    setError(null);
     setGeneratedDDL(null);
     try {
       const result = await generateDDLFromNL(nlInput);
@@ -106,7 +102,7 @@ export default function UploadPage({ onGenerated, onAutoComplete }: UploadPagePr
         setErd(result.erd);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'DDL generation failed');
+      toast.error(e instanceof Error ? e.message : 'DDL generation failed');
     } finally {
       setNlGenerating(false);
     }
@@ -115,7 +111,6 @@ export default function UploadPage({ onGenerated, onAutoComplete }: UploadPagePr
   async function handleAutoDemo() {
     if (!file) return;
     setLoading(true);
-    setError(null);
     try {
       // 1. DDL upload
       setAutoStep('DDL 파싱 중...');
@@ -172,7 +167,7 @@ export default function UploadPage({ onGenerated, onAutoComplete }: UploadPagePr
         onGenerated(genResult, erdResult);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Auto demo failed');
+      toast.error(e instanceof Error ? e.message : 'Auto demo failed');
     } finally {
       setLoading(false);
       setAutoStep(null);
@@ -531,11 +526,6 @@ export default function UploadPage({ onGenerated, onAutoComplete }: UploadPagePr
         </>
       )}
 
-      {error && (
-        <div role="alert" className="rounded-lg border border-destructive bg-destructive/10 p-4 text-sm text-destructive">
-          {error}
-        </div>
-      )}
     </div>
   );
 }

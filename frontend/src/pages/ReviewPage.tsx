@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,7 +16,6 @@ import BuildKGActions from '@/components/review/BuildKGActions';
 import OWLPanel from '@/components/review/OWLPanel';
 import { updateVersion, approveVersion, startKGBuild, uploadCSVFiles, resetGraph, generateMapping, updateMapping, APIError } from '@/api/client';
 import { streamKGBuild } from '@/api/sse';
-import { SUCCESS_MSG_TIMEOUT_MS } from '@/constants';
 import type {
   CSVTableSummary,
   ERDSchema,
@@ -39,8 +39,6 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
   const [evalMetrics] = useState<EvalMetrics | null>(result.eval_report);
   const [status, setStatus] = useState<string>('draft');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // Dialog state
   const [editNodeIdx, setEditNodeIdx] = useState<number | null>(null);
@@ -73,33 +71,21 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
   const versionId = result.version_id;
   const nodeNames = ontology.node_types.map((n) => n.name);
 
-  function showError(msg: string) {
-    setError(msg);
-    setSuccessMsg(null);
-    // 에러는 auto-dismiss하지 않음 — 다음 액션 시 자연 소멸
-  }
-
-  function showSuccess(msg: string) {
-    setSuccessMsg(msg);
-    setError(null);
-    setTimeout(() => setSuccessMsg(null), SUCCESS_MSG_TIMEOUT_MS);
-  }
-
   // ── Save (PUT) ──────────────────────────────────────────────────
 
   async function handleSave() {
     if (!versionId) {
-      showError('No version ID available (PG may be offline)');
+      toast.error('No version ID available (PG may be offline)');
       return;
     }
     setLoading(true);
     try {
       const resp = await updateVersion(versionId, ontology);
       if (resp.updated) {
-        showSuccess('Saved successfully');
+        toast.success('Saved successfully');
       }
     } catch (e) {
-      showError(e instanceof Error ? e.message : 'Save failed');
+      toast.error(e instanceof Error ? e.message : 'Save failed');
     } finally {
       setLoading(false);
     }
@@ -109,16 +95,16 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
 
   async function handleApprove() {
     if (!versionId) {
-      showError('No version ID available (PG may be offline)');
+      toast.error('No version ID available (PG may be offline)');
       return;
     }
     setLoading(true);
     try {
       const resp = await approveVersion(versionId);
       setStatus(resp.status);
-      showSuccess('Approved!');
+      toast.success('Approved!');
     } catch (e) {
-      showError(e instanceof Error ? e.message : 'Approve failed');
+      toast.error(e instanceof Error ? e.message : 'Approve failed');
     } finally {
       setLoading(false);
     }
@@ -197,15 +183,15 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
       if (resp.warnings?.length > 0) setCsvWarnings(resp.warnings);
       // 부분 성공: 유효 파일은 세션 저장, 실패 파일은 에러로 표시
       if (resp.errors?.length > 0) {
-        showSuccess(`CSV: ${resp.tables.length} table(s) OK, ${resp.errors.length} error(s)`);
+        toast.success(`CSV: ${resp.tables.length} table(s) OK, ${resp.errors.length} error(s)`);
       } else {
-        showSuccess(`CSV uploaded: ${resp.tables.length} table(s) validated`);
+        toast.success(`CSV uploaded: ${resp.tables.length} table(s) validated`);
       }
     } catch (e) {
       if (e instanceof APIError && e.errors.length > 0) {
         setCsvErrors(e.errors);
       }
-      showError(e instanceof Error ? e.message : 'CSV upload failed');
+      toast.error(e instanceof Error ? e.message : 'CSV upload failed');
     } finally {
       setCsvUploading(false);
       if (csvInputRef.current) csvInputRef.current.value = '';
@@ -225,9 +211,9 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
       if (resp.validation_warnings.length > 0) {
         setMappingWarnings(resp.validation_warnings);
       }
-      showSuccess(`Mapping generated: ${resp.triples_map_count} nodes, ${resp.relationship_map_count} relationships`);
+      toast.success(`Mapping generated: ${resp.triples_map_count} nodes, ${resp.relationship_map_count} relationships`);
     } catch (e) {
-      showError(e instanceof Error ? e.message : 'Mapping generation failed');
+      toast.error(e instanceof Error ? e.message : 'Mapping generation failed');
     } finally {
       setYamlLoading(false);
     }
@@ -243,9 +229,9 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
       if (resp.validation_warnings?.length > 0) {
         setMappingWarnings(resp.validation_warnings);
       }
-      showSuccess('Mapping saved');
+      toast.success('Mapping saved');
     } catch (e) {
-      showError(e instanceof Error ? e.message : 'Save mapping failed');
+      toast.error(e instanceof Error ? e.message : 'Save mapping failed');
     } finally {
       setYamlLoading(false);
     }
@@ -266,7 +252,7 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
 
   async function handleBuildKG(useMapping = false) {
     if (!versionId) {
-      showError('No version ID available');
+      toast.error('No version ID available');
       return;
     }
     setBuildLoading(true);
@@ -281,21 +267,21 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
           setBuildJob(final);
           setBuildLoading(false);
           if (final.status === 'succeeded') {
-            showSuccess(
+            toast.success(
               `KG built: ${final.progress?.nodes_created ?? 0} nodes, ${final.progress?.relationships_created ?? 0} relationships (${final.progress?.duration_seconds ?? 0}s)`,
             );
           } else if (final.error) {
-            showError(`Build failed at ${final.error.stage}: ${final.error.message}`);
+            toast.error(`Build failed at ${final.error.stage}: ${final.error.message}`);
           }
         },
         (error) => {
           setBuildLoading(false);
-          showError(error.message);
+          toast.error(error.message);
         },
       );
       pollRef.current = cleanup;
     } catch (e) {
-      showError(e instanceof Error ? e.message : 'Build KG failed');
+      toast.error(e instanceof Error ? e.message : 'Build KG failed');
       setBuildLoading(false);
     }
   }
@@ -308,9 +294,9 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
     try {
       const resp = await resetGraph();
       setBuildJob(null);
-      showSuccess(`Graph reset: ${resp.deleted_nodes} nodes, ${resp.deleted_edges} edges deleted`);
+      toast.success(`Graph reset: ${resp.deleted_nodes} nodes, ${resp.deleted_edges} edges deleted`);
     } catch (e) {
-      showError(e instanceof Error ? e.message : 'Reset failed');
+      toast.error(e instanceof Error ? e.message : 'Reset failed');
     } finally {
       setResetLoading(false);
     }
@@ -359,18 +345,6 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
           {result.warnings.map((w, i) => (
             <p key={i}>{w}</p>
           ))}
-        </div>
-      )}
-
-      {/* Messages */}
-      {error && (
-        <div role="alert" className="rounded-lg border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
-          {error}
-        </div>
-      )}
-      {successMsg && (
-        <div role="status" aria-live="polite" className="rounded-lg border border-green-500 bg-green-50 p-3 text-sm text-green-800">
-          {successMsg}
         </div>
       )}
 
