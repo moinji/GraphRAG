@@ -9,8 +9,6 @@ import pytest
 from app.document.linker import LinkingResult, link_document_to_kg, unlink_document_from_kg
 from app.document.ner import ExtractedEntity
 
-pytestmark = pytest.mark.skip(reason="stub: tests not yet implemented")
-
 
 # ── LinkingResult dataclass ─────────────────────────────────────
 

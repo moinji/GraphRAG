@@ -13,8 +13,6 @@ from httpx import ASGITransport, AsyncClient
 
 from app.main import create_app
 
-pytestmark = pytest.mark.skip(reason="stub: tests not yet implemented")
-
 
 @pytest.fixture
 def _app():

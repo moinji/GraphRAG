@@ -8,13 +8,12 @@ import pytest
 
 from app.document.embedder import embed_single, embed_texts, get_embedding_dimension
 
-pytestmark = pytest.mark.skip(reason="stub: tests not yet implemented")
-
 
 class TestEmbeddingDimension:
     def test_default_dimension(self):
         dim = get_embedding_dimension()
-        assert dim == 1536
+        # Without OpenAI key, falls back to local model dimension (384)
+        assert dim in (384, 1536)
 
     def test_dimension_is_positive(self):
         assert get_embedding_dimension() > 0
@@ -34,7 +33,8 @@ class TestEmbedTexts:
             result = embed_texts(["hello"])
 
         assert len(result) == 1
-        assert len(result[0]) == 1536
+        dim = get_embedding_dimension()
+        assert len(result[0]) == dim
         assert all(v == 0.0 for v in result[0])
 
     @patch("app.document.embedder.settings")
@@ -66,7 +66,8 @@ class TestEmbedTexts:
 
         assert len(result) == 1
         # Should be zero vectors as last resort
-        assert len(result[0]) == 1536
+        dim = get_embedding_dimension()
+        assert len(result[0]) == dim
 
     @patch("app.document.embedder.settings")
     def test_batch_processing(self, mock_settings):
@@ -87,4 +88,5 @@ class TestEmbedSingle:
         with patch("app.document.embedder._embed_local", side_effect=ImportError("no model")):
             result = embed_single("hello")
 
-        assert len(result) == 1536
+        dim = get_embedding_dimension()
+        assert len(result) == dim

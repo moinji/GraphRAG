@@ -9,8 +9,6 @@ import pytest
 
 from app.query.wisdom_router import WisdomIntent, classify_wisdom_intent
 
-pytestmark = pytest.mark.skip(reason="stub: tests not yet implemented")
-
 
 # ── Wisdom Router tests ──────────────────────────────────────────
 

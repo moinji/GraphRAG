@@ -12,8 +12,6 @@ from app.document.parser import (
     _strip_markdown,
 )
 
-pytestmark = pytest.mark.skip(reason="stub: tests not yet implemented")
-
 
 class TestDetectFileType:
     def test_pdf(self):
