@@ -9,8 +9,10 @@ __pycache__/
 *.pyc
 node_modules/
 dist/
-*.md
 docs/
+*.md
+!examples/**/*.md
+!examples/**/*.sql
 .vscode/
 .idea/
 htmlcov/

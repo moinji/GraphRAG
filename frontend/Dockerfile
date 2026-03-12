@@ -20,7 +20,7 @@ COPY frontend/nginx.conf /etc/nginx/templates/default.conf.template
 # Cloud Run uses PORT env var (default 8080)
 # BACKEND_URL: Cloud Run backend service URL
 ENV PORT=8080
-ENV BACKEND_URL=http://backend:8000
+ENV BACKEND_URL=http://backend:8080
 
 EXPOSE ${PORT}
 
