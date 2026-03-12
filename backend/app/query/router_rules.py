@@ -15,6 +15,35 @@ logger = logging.getLogger(__name__)
 # Return type: (template_id, route, slots, params)
 RouteResult = tuple[str, str, dict[str, str], dict[str, object]]
 
+# ── Synonym normalization ────────────────────────────────────────
+# Maps synonyms/alternative expressions to canonical forms used in regex patterns.
+# Key = canonical form, Value = list of synonyms (applied case-insensitively).
+
+_SYNONYM_MAP: dict[str, list[str]] = {
+    "주문": ["오더", "발주", "결제"],
+    "구매": ["구입", "산", "샀"],
+    "상품": ["제품", "물건", "아이템", "품목"],
+    "고객": ["소비자", "사용자", "유저", "회원", "구매자"],
+    "카테고리": ["분류", "범주"],
+    "쿠폰": ["할인권", "할인쿠폰"],
+    "리뷰": ["후기", "평가", "평점"],
+    "공급업체": ["공급자", "납품업체", "벤더"],
+    "order": ["purchase"],
+    "product": ["item", "merchandise"],
+    "customer": ["buyer", "client", "user"],
+    "category": ["classification"],
+    "coupon": ["discount code", "voucher"],
+}
+
+
+def _normalize_synonyms(text: str) -> str:
+    """Replace known synonyms with canonical forms for regex matching."""
+    result = text
+    for canonical, synonyms in _SYNONYM_MAP.items():
+        for syn in synonyms:
+            result = re.sub(re.escape(syn), canonical, result, flags=re.IGNORECASE)
+    return result
+
 # ── Aggregation keyword patterns ────────────────────────────────
 
 AGG_KEYWORDS = re.compile(
@@ -253,6 +282,9 @@ def classify_by_rules(question: str, tenant_id: str | None = None) -> RouteResul
     Order matters: more specific patterns are checked first.
     Falls back to schema-aware generic patterns for any domain.
     """
+    # Normalize synonyms before regex matching
+    question = _normalize_synonyms(question)
+
     # Q2 must be checked before Q1 (Q2 is a superset pattern)
     m = _Q2_RE.search(question)
     if not m:

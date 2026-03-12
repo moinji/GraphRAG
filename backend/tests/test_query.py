@@ -230,6 +230,9 @@ async def test_query_api_unsupported(api_client: AsyncClient):
 async def test_query_api_neo4j_failure(api_client: AsyncClient):
     """#14: Neo4j failure → 502 (non-cached question)."""
     from app.exceptions import CypherExecutionError
+    from app.query.pipeline import invalidate_query_cache
+
+    invalidate_query_cache()  # clear LRU cache from prior tests
 
     with patch(
         "app.query.pipeline._execute_cypher",
@@ -747,3 +750,50 @@ def test_cache_c_all_five_present():
         assert resp is not None, f"Cache miss for: {q}"
         assert resp.cached is True
         assert resp.mode == "c"
+
+
+# ════════════════════════════════════════════════════════════════════
+#  Synonym normalization
+# ════════════════════════════════════════════════════════════════════
+
+
+def test_synonym_normalize_korean_order():
+    """#S1: '오더' → '주문' 정규화."""
+    from app.query.router_rules import _normalize_synonyms
+    assert "주문" in _normalize_synonyms("김민수가 오더한 상품")
+
+
+def test_synonym_normalize_korean_product():
+    """#S2: '제품' → '상품' 정규화."""
+    from app.query.router_rules import _normalize_synonyms
+    assert "상품" in _normalize_synonyms("어떤 제품이 있나요?")
+
+
+def test_synonym_normalize_english():
+    """#S3: 'purchase' → 'order' 정규화."""
+    from app.query.router_rules import _normalize_synonyms
+    assert "order" in _normalize_synonyms("What did John purchase?")
+
+
+def test_synonym_q1_routes_with_synonym():
+    """#S4: '김민수가 구입한 제품' → Q1 라우팅 성공."""
+    from app.query.router_rules import classify_by_rules
+    result = classify_by_rules("김민수가 구입한 제품")
+    assert result is not None, "Synonym-based Q1 should route"
+    template_id = result[0]
+    assert template_id in ("one_hop_out", "two_hop"), f"Expected traverse template, got {template_id}"
+
+
+def test_synonym_q5_routes_with_synonym():
+    """#S5: '할인권 사용 미사용 비교' → Q5 라우팅 성공."""
+    from app.query.router_rules import classify_by_rules
+    result = classify_by_rules("할인권 사용 미사용 비교")
+    assert result is not None, "Synonym-based Q5 should route"
+    assert result[0] == "custom_q5"
+
+
+def test_synonym_customer_variation():
+    """#S6: '소비자' → '고객' 정규화."""
+    from app.query.router_rules import _normalize_synonyms
+    normalized = _normalize_synonyms("소비자가 주문한 상품")
+    assert "고객" in normalized

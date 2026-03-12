@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+from collections import OrderedDict
 
 from app.db.neo4j_client import get_driver
 from app.exceptions import CypherExecutionError
@@ -19,6 +20,36 @@ from app.query.template_registry import get_template
 logger = logging.getLogger(__name__)
 
 _HANGUL_RE = re.compile(r"[\uac00-\ud7a3]")
+
+# ── LRU cache for Mode A deterministic queries ──────────────────
+_QUERY_CACHE_MAX = 128
+_query_cache: OrderedDict[tuple[str, str | None], QueryResponse] = OrderedDict()
+
+
+def _cache_get(question: str, tenant_id: str | None) -> QueryResponse | None:
+    key = (question, tenant_id)
+    if key in _query_cache:
+        _query_cache.move_to_end(key)
+        return _query_cache[key]
+    return None
+
+
+def _cache_put(question: str, tenant_id: str | None, response: QueryResponse) -> None:
+    key = (question, tenant_id)
+    _query_cache[key] = response
+    _query_cache.move_to_end(key)
+    while len(_query_cache) > _QUERY_CACHE_MAX:
+        _query_cache.popitem(last=False)
+
+
+def invalidate_query_cache(tenant_id: str | None = None) -> None:
+    """Clear query cache — call after KG rebuild."""
+    if tenant_id is None:
+        _query_cache.clear()
+    else:
+        to_remove = [k for k in _query_cache if k[1] == tenant_id]
+        for k in to_remove:
+            del _query_cache[k]
 
 
 def _is_korean(text: str) -> bool:
@@ -51,6 +82,11 @@ def run_query(
         cached = get_cached_answer(question)
         if cached is not None:
             return cached
+
+    # A안: LRU cache check
+    lru_hit = _cache_get(question, tenant_id)
+    if lru_hit is not None:
+        return lru_hit
 
     # A안: template-based pipeline
     # 1. Route (pass tenant_id for schema-aware LLM fallback)
@@ -93,7 +129,7 @@ def run_query(
     related_node_ids = _extract_related_node_ids(records, template_id, slots, params)
 
     latency_ms = int((time.time() - start_time) * 1000)
-    return QueryResponse(
+    response = QueryResponse(
         question=question,
         answer=answer,
         cypher=cypher,
@@ -106,6 +142,10 @@ def run_query(
         latency_ms=latency_ms,
         related_node_ids=related_node_ids,
     )
+
+    # Cache successful Mode A results
+    _cache_put(question, tenant_id, response)
+    return response
 
 
 def _execute_cypher(cypher: str, params: dict[str, object]) -> list[dict]:

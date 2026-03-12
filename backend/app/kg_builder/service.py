@@ -1,6 +1,7 @@
 """KG Build service — orchestrates data generation + Neo4j loading.
 
-Uses in-memory dict as primary job store with PG as best-effort backup.
+PG is the primary job store; in-memory dict serves as a fast cache.
+If PG is unavailable, falls back to in-memory only (graceful degradation).
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from app.models.schemas import (
 
 logger = logging.getLogger(__name__)
 
-# In-memory job store — primary source of truth for polling
+# In-memory job cache — fast lookup, PG is authoritative
 MAX_COMPLETED_JOBS = 100
 _jobs: dict[str, KGBuildResponse] = {}
 _active_builds: set[str] = set()  # job IDs currently running
@@ -59,7 +60,7 @@ def _prune_completed_jobs() -> None:
 
 
 def get_job(job_id: str, tenant_id: str | None = None) -> KGBuildResponse | None:
-    """Get job status from in-memory store, falling back to PG."""
+    """Get job status from cache, falling back to PG (authoritative)."""
     job = _jobs.get(job_id)
     if job is not None:
         return job
@@ -88,23 +89,24 @@ def get_job(job_id: str, tenant_id: str | None = None) -> KGBuildResponse | None
 
 
 def create_job(job_id: str, version_id: int, tenant_id: str | None = None) -> KGBuildResponse:
-    """Create a new queued job in memory and PG (best-effort)."""
+    """Create a new queued job — PG primary, in-memory cache."""
     _prune_completed_jobs()
     job = KGBuildResponse(
         build_job_id=job_id,
         status="queued",
         version_id=version_id,
     )
-    _jobs[job_id] = job
 
-    # PG best-effort
+    # PG primary
     try:
         from app.db.kg_build_store import save_build
 
         save_build(job_id, version_id, tenant_id=tenant_id)
     except Exception:
-        logger.error("PG save_build failed for %s — job not persisted to DB", job_id, exc_info=True)
+        logger.warning("PG save_build failed for %s — using in-memory only", job_id, exc_info=True)
 
+    # Cache in memory
+    _jobs[job_id] = job
     return job
 
 
@@ -190,6 +192,11 @@ def run_kg_build(
         try:
             from app.db.graph_schema import invalidate_schema_cache
             invalidate_schema_cache(tenant_id)
+        except Exception:
+            pass
+        try:
+            from app.query.pipeline import invalidate_query_cache
+            invalidate_query_cache(tenant_id)
         except Exception:
             pass
 
@@ -297,20 +304,8 @@ def _update_job(
     started_at: str | None = None,
     completed_at: str | None = None,
 ) -> None:
-    """Update job in memory and PG (best-effort)."""
-    job = _jobs.get(job_id)
-    if job:
-        _jobs[job_id] = job.model_copy(
-            update={
-                "status": status,
-                **({"progress": progress} if progress is not None else {}),
-                **({"error": error} if error is not None else {}),
-                **({"started_at": started_at} if started_at is not None else {}),
-                **({"completed_at": completed_at} if completed_at is not None else {}),
-            }
-        )
-
-    # PG best-effort
+    """Update job — PG primary, then sync in-memory cache."""
+    # PG primary
     try:
         from app.db.kg_build_store import update_build
 
@@ -323,4 +318,17 @@ def _update_job(
             completed_at=completed_at,
         )
     except Exception:
-        logger.error("PG update_build failed for %s — status not synced to DB", job_id, exc_info=True)
+        logger.warning("PG update_build failed for %s — cache-only update", job_id, exc_info=True)
+
+    # Update in-memory cache
+    job = _jobs.get(job_id)
+    if job:
+        _jobs[job_id] = job.model_copy(
+            update={
+                "status": status,
+                **({"progress": progress} if progress is not None else {}),
+                **({"error": error} if error is not None else {}),
+                **({"started_at": started_at} if started_at is not None else {}),
+                **({"completed_at": completed_at} if completed_at is not None else {}),
+            }
+        )
