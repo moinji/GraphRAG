@@ -339,6 +339,7 @@ class HealthCheckResponse(BaseModel):
     status: str
     neo4j: ServiceHealth
     postgres: ServiceHealth
+    llm: ServiceHealth | None = None
 
 
 # ── DIKW Wisdom ────────────────────────────────────────────────

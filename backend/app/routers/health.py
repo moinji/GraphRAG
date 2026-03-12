@@ -54,16 +54,31 @@ def _check_postgres() -> dict[str, Any]:
         return {"status": "error", "detail": str(e)}
 
 
+def _check_llm() -> dict[str, Any]:
+    from app.llm.provider import has_any_api_key
+
+    if not has_any_api_key():
+        return {"status": "error", "detail": "No API key configured"}
+    providers: list[str] = []
+    if settings.openai_api_key:
+        providers.append(f"openai ({settings.openai_model})")
+    if settings.anthropic_api_key:
+        providers.append(f"anthropic ({settings.anthropic_model})")
+    return {"status": "ok", "detail": ", ".join(providers)}
+
+
 @router.get("/health", response_model=HealthCheckResponse)
 def health_check() -> dict[str, Any]:
     neo4j = _check_neo4j()
     postgres = _check_postgres()
+    llm = _check_llm()
 
-    all_ok = all(s["status"] == "ok" for s in [neo4j, postgres])
+    core_ok = all(s["status"] == "ok" for s in [neo4j, postgres])
     return {
-        "status": "healthy" if all_ok else "degraded",
+        "status": "healthy" if core_ok else "degraded",
         "neo4j": neo4j,
         "postgres": postgres,
+        "llm": llm,
     }
 
 

@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.auth import APIKeyMiddleware
 from app.logging_config import setup_logging
 from app.rate_limit import RateLimitMiddleware
+from app.request_context import RequestContextMiddleware
 
 # Initialize structured logging before anything else
 setup_logging(env=os.getenv("APP_ENV", "development"))
@@ -69,6 +70,9 @@ def create_app() -> FastAPI:
 
     # Auth middleware (must be added before CORS)
     application.add_middleware(APIKeyMiddleware)
+
+    # Request context (request_id + latency logging) — pure ASGI, no body issues
+    application.add_middleware(RequestContextMiddleware)
 
     # CORS
     cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
