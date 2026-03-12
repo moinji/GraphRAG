@@ -138,69 +138,24 @@ def _build_name_prompt(label: str, sample: dict) -> str:
     )
 
 
-def _try_openai(prompt: str) -> str | None:
-    if not settings.openai_api_key:
-        return None
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=settings.openai_api_key)
-        resp = client.chat.completions.create(
-            model=settings.openai_router_model,
-            max_tokens=100,
-            temperature=0,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        if resp.usage:
-            from app.llm_tracker import tracker
-            tracker.record(
-                caller="name_template",
-                model=settings.openai_router_model,
-                input_tokens=resp.usage.prompt_tokens,
-                output_tokens=resp.usage.completion_tokens,
-            )
-        return resp.choices[0].message.content.strip().strip("\"'`")
-    except Exception as exc:
-        logger.warning("OpenAI name template failed: %s", exc)
-        return None
-
-
-def _try_anthropic(prompt: str) -> str | None:
-    if not settings.anthropic_api_key:
-        return None
-    try:
-        from anthropic import Anthropic
-        client = Anthropic(api_key=settings.anthropic_api_key)
-        resp = client.messages.create(
-            model=settings.anthropic_model,
-            max_tokens=100,
-            temperature=0,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        if resp.usage:
-            from app.llm_tracker import tracker
-            tracker.record(
-                caller="name_template",
-                model=settings.anthropic_model,
-                input_tokens=resp.usage.input_tokens,
-                output_tokens=resp.usage.output_tokens,
-            )
-        return resp.content[0].text.strip().strip("\"'`")
-    except Exception as exc:
-        logger.warning("Anthropic name template failed: %s", exc)
-        return None
-
-
 def _ask_llm_name_template(label: str, prop_names: list[str], sample_row: dict) -> str | None:
     """Ask LLM to generate a display name template for a node type.
 
-    Tries OpenAI first, falls back to Anthropic. Returns a Python format
-    string like ``"{city} {district}"`` or *None* on failure.
+    Uses unified provider (OpenAI → Anthropic fallback). Returns a Python
+    format string like ``"{city} {district}"`` or *None* on failure.
     One call per node type (not per row).
     """
+    from app.llm.provider import call_llm
+
     sample = {k: sample_row.get(k) for k in prop_names if k in sample_row}
     prompt = _build_name_prompt(label, sample)
 
-    template = _try_openai(prompt) or _try_anthropic(prompt)
+    result = call_llm(
+        messages=[{"role": "user", "content": prompt}],
+        caller="name_template",
+        max_tokens=100,
+    )
+    template = result.text.strip("\"'`") if result else None
     if not template:
         return None
 
@@ -341,7 +296,9 @@ def load_to_neo4j(
                 if prop.name != key_prop:
                     session.execute_write(_create_index, lbl, prop.name)
 
-        # ── 3. Nodes ──────────────────────────────────────────────
+        # ── 3+4. Nodes + Relationships in a single transaction ────
+        # Prepare all data before opening the transaction
+        node_batches: list[tuple[str, str, list[str], list[dict]]] = []
         for nt in ontology.node_types:
             key_prop = _find_key_prop(nt)
             lbl = prefixed_label(tenant_id, nt.name)
@@ -351,13 +308,11 @@ def load_to_neo4j(
             if "name" not in prop_names:
                 prop_names.append("name")
             for i in range(0, len(rows), _BATCH_SIZE):
-                batch = rows[i : i + _BATCH_SIZE]
-                session.execute_write(_load_nodes, lbl, key_prop, prop_names, batch)
+                node_batches.append((lbl, key_prop, prop_names, rows[i : i + _BATCH_SIZE]))
             stats["nodes"] += len(rows)
 
-        # ── 4. Relationships ──────────────────────────────────────
         node_key_map = {nt.name: _find_key_prop(nt) for nt in ontology.node_types}
-
+        rel_batches: list[tuple[RelationshipType, list[dict], str, str]] = []
         for rel in ontology.relationship_types:
             table_rows = data.get(rel.data_table, [])
             src_key = node_key_map.get(rel.source_node, "id")
@@ -373,7 +328,6 @@ def load_to_neo4j(
                     lr[p.source_column] = row.get(p.source_column)
                 loader_rows.append(lr)
 
-            # Create a tenant-prefixed copy of the relationship for Cypher generation
             prefixed_rel = RelationshipType(
                 name=rel.name,
                 source_node=prefixed_label(tenant_id, rel.source_node),
@@ -385,9 +339,16 @@ def load_to_neo4j(
                 derivation=rel.derivation,
             )
             for i in range(0, len(loader_rows), _BATCH_SIZE):
-                batch = loader_rows[i : i + _BATCH_SIZE]
-                session.execute_write(_load_relationships, prefixed_rel, batch, src_key, tgt_key)
+                rel_batches.append((prefixed_rel, loader_rows[i : i + _BATCH_SIZE], src_key, tgt_key))
             stats["relationships"] += len(loader_rows)
+
+        # Execute all node + relationship loads in one transaction (atomic)
+        with session.begin_transaction() as tx:
+            for lbl, key_prop, prop_names, batch in node_batches:
+                _load_nodes(tx, lbl, key_prop, prop_names, batch)
+            for prefixed_rel, batch, src_key, tgt_key in rel_batches:
+                _load_relationships(tx, prefixed_rel, batch, src_key, tgt_key)
+            tx.commit()
 
     # ── 5. Verify counts (tenant-scoped) ──────────────────────────
     with driver.session() as session:

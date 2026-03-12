@@ -1,4 +1,4 @@
-"""Stage 2: LLM-based query router (OpenAI).
+"""Stage 2: LLM-based query router (via unified provider).
 
 Falls back gracefully if API key is missing or call fails.
 """
@@ -9,6 +9,7 @@ import json
 import logging
 
 from app.config import settings
+from app.llm.provider import call_llm, has_any_api_key
 from app.query.template_registry import list_templates_for_prompt
 
 logger = logging.getLogger(__name__)
@@ -114,59 +115,6 @@ _FEW_SHOT = [
 ]
 
 
-def _call_router_llm(system_prompt: str, question: str) -> str | None:
-    """Try OpenAI first, fall back to Anthropic. Returns raw text or None."""
-    messages = [{"role": "system", "content": system_prompt}] + _FEW_SHOT + [{"role": "user", "content": question}]
-
-    if settings.openai_api_key:
-        try:
-            from openai import OpenAI
-            client = OpenAI(api_key=settings.openai_api_key)
-            response = client.chat.completions.create(
-                model=settings.openai_router_model,
-                max_tokens=1024,
-                temperature=0,
-                messages=messages,
-            )
-            if response.usage:
-                from app.llm_tracker import tracker
-                tracker.record(
-                    caller="router_llm",
-                    model=settings.openai_router_model,
-                    input_tokens=response.usage.prompt_tokens,
-                    output_tokens=response.usage.completion_tokens,
-                )
-            return response.choices[0].message.content.strip()
-        except Exception as e:
-            logger.warning("OpenAI router failed, trying Anthropic: %s", e)
-
-    if settings.anthropic_api_key:
-        try:
-            import anthropic
-            client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-            user_messages = [m for m in messages if m["role"] != "system"]
-            response = client.messages.create(
-                model=settings.anthropic_model,
-                max_tokens=1024,
-                temperature=0,
-                system=system_prompt,
-                messages=user_messages,
-            )
-            if response.usage:
-                from app.llm_tracker import tracker
-                tracker.record(
-                    caller="router_llm",
-                    model=settings.anthropic_model,
-                    input_tokens=response.usage.input_tokens,
-                    output_tokens=response.usage.output_tokens,
-                )
-            return response.content[0].text.strip() if response.content else None
-        except Exception as e:
-            logger.warning("Anthropic router also failed: %s", e)
-
-    return None
-
-
 def classify_by_llm(
     question: str, tenant_id: str | None = None,
 ) -> RouteResult | None:
@@ -175,7 +123,7 @@ def classify_by_llm(
     Returns (template_id, route, slots, params) or None on failure.
     Non-fatal: logs warnings instead of raising.
     """
-    if not settings.openai_api_key and not settings.anthropic_api_key:
+    if not has_any_api_key():
         logger.warning("LLM router skipped: no API key")
         return None
 
@@ -187,7 +135,15 @@ def classify_by_llm(
         templates=list_templates_for_prompt(),
         schema=schema_text,
     )
-    raw_text = _call_router_llm(system_prompt, question)
+    messages = _FEW_SHOT + [{"role": "user", "content": question}]
+    result = call_llm(
+        messages=messages,
+        system=system_prompt,
+        caller="router_llm",
+        model=settings.openai_router_model,
+        max_tokens=1024,
+    )
+    raw_text = result.text if result else None
     if raw_text is None:
         return None
 

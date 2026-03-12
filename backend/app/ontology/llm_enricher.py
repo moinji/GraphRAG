@@ -1,4 +1,4 @@
-"""Stage 2: OpenAI API ontology enrichment."""
+"""Stage 2: LLM ontology enrichment (via unified provider)."""
 
 from __future__ import annotations
 
@@ -6,64 +6,12 @@ import json
 import logging
 from typing import Any
 
-from app.config import settings
 from app.exceptions import LLMEnrichmentError
+from app.llm.provider import call_llm, has_any_api_key
 from app.models.schemas import LLMEnrichmentDiff, OntologySpec
 from app.ontology.prompts import CORE_SYSTEM_PROMPT, build_enrichment_prompt
 
 logger = logging.getLogger(__name__)
-
-
-def _call_llm_enricher(messages: list[dict]) -> str | None:
-    """Try OpenAI first, fall back to Anthropic. Returns raw text or None."""
-    if settings.openai_api_key:
-        try:
-            from openai import OpenAI
-            client = OpenAI(api_key=settings.openai_api_key)
-            response = client.chat.completions.create(
-                model=settings.openai_model,
-                max_tokens=4096,
-                temperature=0,
-                messages=[{"role": "system", "content": CORE_SYSTEM_PROMPT}] + messages,
-            )
-            if response.usage:
-                from app.llm_tracker import tracker
-                tracker.record(
-                    caller="llm_enricher",
-                    model=settings.openai_model,
-                    input_tokens=response.usage.prompt_tokens,
-                    output_tokens=response.usage.completion_tokens,
-                )
-            return response.choices[0].message.content
-        except Exception as e:
-            logger.warning("OpenAI enrichment failed, trying Anthropic: %s", e)
-
-    if settings.anthropic_api_key:
-        try:
-            import anthropic
-            client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-            # Convert messages to Anthropic format (system separate)
-            user_messages = [m for m in messages if m.get("role") != "system"]
-            response = client.messages.create(
-                model=settings.anthropic_model,
-                max_tokens=4096,
-                temperature=0,
-                system=CORE_SYSTEM_PROMPT,
-                messages=user_messages if user_messages else messages,
-            )
-            if response.usage:
-                from app.llm_tracker import tracker
-                tracker.record(
-                    caller="llm_enricher",
-                    model=settings.anthropic_model,
-                    input_tokens=response.usage.input_tokens,
-                    output_tokens=response.usage.output_tokens,
-                )
-            return response.content[0].text if response.content else None
-        except Exception as e:
-            logger.warning("Anthropic enrichment also failed: %s", e)
-
-    return None
 
 
 def enrich_ontology(
@@ -79,13 +27,14 @@ def enrich_ontology(
     Raises:
         LLMEnrichmentError: If API key is missing or API call fails.
     """
-    if not settings.openai_api_key and not settings.anthropic_api_key:
+    if not has_any_api_key():
         raise LLMEnrichmentError("No LLM API key configured (OPENAI_API_KEY or ANTHROPIC_API_KEY)")
 
     baseline_dict = baseline.model_dump()
     messages = build_enrichment_prompt(baseline_dict, erd_dict, domain_hint_text)
 
-    raw_text = _call_llm_enricher(messages)
+    result = call_llm(messages=messages, system=CORE_SYSTEM_PROMPT, caller="llm_enricher")
+    raw_text = result.text if result else None
 
     if raw_text is None:
         raise LLMEnrichmentError("All LLM API calls failed")
