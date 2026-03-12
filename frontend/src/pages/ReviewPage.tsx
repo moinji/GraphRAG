@@ -12,6 +12,7 @@ import EditNodeDialog from '@/components/review/EditNodeDialog';
 import EditRelationshipDialog from '@/components/review/EditRelationshipDialog';
 import CSVUploadSection from '@/components/review/CSVUploadSection';
 import BuildKGActions from '@/components/review/BuildKGActions';
+import OWLPanel from '@/components/review/OWLPanel';
 import { updateVersion, approveVersion, startKGBuild, uploadCSVFiles, resetGraph, generateMapping, updateMapping, APIError } from '@/api/client';
 import { streamKGBuild } from '@/api/sse';
 import { SUCCESS_MSG_TIMEOUT_MS } from '@/constants';
@@ -438,6 +439,7 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
               <TabsTrigger value="relationships">관계</TabsTrigger>
               <TabsTrigger value="mapping">매핑 (YAML)</TabsTrigger>
               <TabsTrigger value="changes">변경 사항</TabsTrigger>
+              <TabsTrigger value="owl">OWL / SHACL</TabsTrigger>
             </TabsList>
 
             <TabsContent value="nodes" className="mt-4">
@@ -551,6 +553,10 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
 
             <TabsContent value="changes" className="mt-4">
               <DiffPanel diffs={result.llm_diffs} stage={result.stage} />
+            </TabsContent>
+
+            <TabsContent value="owl" className="mt-4">
+              <OWLPanel versionId={versionId} locked={locked} />
             </TabsContent>
           </Tabs>
 
