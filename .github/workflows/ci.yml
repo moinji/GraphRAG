@@ -46,14 +46,99 @@ jobs:
       - name: Type check & Build
         run: npm run build
 
-  docker-build:
+  docker-e2e:
     runs-on: ubuntu-latest
     needs: [backend-test, frontend-build]
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build backend image
-        run: docker build -f backend/Dockerfile -t graphrag-backend .
+      - name: Start all services
+        run: docker compose up -d --build --wait
+        timeout-minutes: 7
 
-      - name: Build frontend image
-        run: docker build -f frontend/Dockerfile -t graphrag-frontend .
+      - name: Health check
+        run: |
+          STATUS=$(curl -sf http://localhost:8000/api/v1/health | jq -r '.status')
+          echo "Health status: $STATUS"
+          [ "$STATUS" = "healthy" ] || [ "$STATUS" = "degraded" ]
+
+      - name: Upload DDL and generate ontology
+        run: |
+          # Upload DDL
+          DDL=$(cat examples/schemas/ecommerce.sql)
+          UPLOAD=$(curl -sf -X POST http://localhost:8000/api/v1/ddl/parse \
+            -H 'Content-Type: application/json' \
+            -d "{\"ddl\": $(echo "$DDL" | jq -Rs .)}")
+          TABLE_COUNT=$(echo "$UPLOAD" | jq '.tables | length')
+          echo "Tables parsed: $TABLE_COUNT"
+          [ "$TABLE_COUNT" -ge 10 ]
+
+          # Generate ontology (skip LLM — FK rules only)
+          ONT=$(curl -sf -X POST http://localhost:8000/api/v1/ontology/generate \
+            -H 'Content-Type: application/json' \
+            -d "{\"erd\": $UPLOAD, \"skip_llm\": true}")
+          NODES=$(echo "$ONT" | jq '.ontology.node_types | length')
+          RELS=$(echo "$ONT" | jq '.ontology.relationship_types | length')
+          VERSION=$(echo "$ONT" | jq '.version_id')
+          echo "Ontology: $NODES nodes, $RELS rels, version=$VERSION"
+          [ "$NODES" -eq 9 ] && [ "$RELS" -eq 12 ]
+
+          # Approve version
+          curl -sf -X POST "http://localhost:8000/api/v1/ontology/versions/${VERSION}/approve" \
+            -H 'Content-Type: application/json' > /dev/null
+
+          # Build KG
+          BUILD=$(curl -sf -X POST http://localhost:8000/api/v1/kg/build \
+            -H 'Content-Type: application/json' \
+            -d "{\"version_id\": $VERSION}")
+          JOB_ID=$(echo "$BUILD" | jq -r '.build_job_id')
+          echo "KG build job: $JOB_ID"
+
+          # Poll until complete (max 60s)
+          for i in $(seq 1 30); do
+            sleep 2
+            JOB=$(curl -sf "http://localhost:8000/api/v1/kg/build/$JOB_ID")
+            STATUS=$(echo "$JOB" | jq -r '.status')
+            echo "  [$i] status=$STATUS"
+            if [ "$STATUS" = "succeeded" ]; then
+              NODES_CREATED=$(echo "$JOB" | jq '.progress.nodes_created')
+              RELS_CREATED=$(echo "$JOB" | jq '.progress.relationships_created')
+              echo "KG built: $NODES_CREATED nodes, $RELS_CREATED rels"
+              [ "$NODES_CREATED" -gt 0 ]
+              break
+            elif [ "$STATUS" = "failed" ]; then
+              echo "KG build failed!"
+              echo "$JOB" | jq '.error'
+              exit 1
+            fi
+          done
+          [ "$STATUS" = "succeeded" ]
+
+      - name: Query smoke test (cached Mode A)
+        run: |
+          RESP=$(curl -sf -X POST http://localhost:8000/api/v1/query \
+            -H 'Content-Type: application/json' \
+            -d '{"question": "List all products in Electronics category", "mode": "a"}')
+          echo "$RESP" | jq '{answer: .answer, cached: .cached, template_id: .template_id}'
+          ANSWER=$(echo "$RESP" | jq -r '.answer')
+          [ -n "$ANSWER" ] && [ "$ANSWER" != "null" ]
+
+      - name: Frontend serves correctly
+        run: |
+          HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/)
+          echo "Frontend HTTP: $HTTP_CODE"
+          [ "$HTTP_CODE" = "200" ]
+
+          # Verify API proxy works through nginx
+          PROXY_CODE=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/v1/health)
+          echo "Proxy HTTP: $PROXY_CODE"
+          [ "$PROXY_CODE" = "200" ]
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs --tail=80
+
+      - name: Teardown
+        if: always()
+        run: docker compose down -v
