@@ -285,3 +285,71 @@ export interface SHACLValidationResponse {
   issues: SHACLIssue[];
   level: string;
 }
+
+// ── Schema Evolution ────────────────────────────────────────────
+
+export interface PropertyChange {
+  name: string;
+  change_type: 'added' | 'removed' | 'modified';
+  old_value: string | null;
+  new_value: string | null;
+}
+
+export interface NodeTypeDiff {
+  name: string;
+  change_type: 'added' | 'removed' | 'modified';
+  source_table: string;
+  property_changes: PropertyChange[];
+}
+
+export interface RelationshipTypeDiff {
+  name: string;
+  change_type: 'added' | 'removed' | 'modified';
+  source_node: string;
+  target_node: string;
+  property_changes: PropertyChange[];
+  endpoint_changed: boolean;
+}
+
+export interface OntologyDiff {
+  base_version_id: number;
+  target_version_id: number;
+  node_diffs: NodeTypeDiff[];
+  relationship_diffs: RelationshipTypeDiff[];
+  summary: string;
+  is_breaking: boolean;
+}
+
+export interface ImpactAnalysis {
+  affected_node_counts: Record<string, number>;
+  affected_relationship_counts: Record<string, number>;
+  total_affected_nodes: number;
+  total_affected_relationships: number;
+  warnings: string[];
+  estimated_duration_seconds: number;
+}
+
+export interface MigrationProgress {
+  current_step: string;
+  step_number: number;
+  total_steps: number;
+  nodes_added: number;
+  nodes_removed: number;
+  relationships_added: number;
+  relationships_removed: number;
+  properties_modified: number;
+  duration_seconds: number;
+}
+
+export interface MigrationResponse {
+  migration_job_id: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed';
+  diff: OntologyDiff | null;
+  impact: ImpactAnalysis | null;
+  progress: MigrationProgress | null;
+  error: KGBuildErrorDetail | null;
+  base_version_id: number;
+  target_version_id: number;
+  started_at: string | null;
+  completed_at: string | null;
+}

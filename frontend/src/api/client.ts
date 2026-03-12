@@ -7,7 +7,9 @@ import type {
   KGBuildResponse,
   MappingGenerateResponse,
   MappingPreview,
+  MigrationResponse,
   OntologyApproveResponse,
+  OntologyDiff,
   OntologyGenerateResponse,
   OntologySpec,
   OntologyUpdateResponse,
@@ -391,4 +393,57 @@ export async function validateSHACL(
     `${BASE}/owl/validate/${versionId}`,
     { method: 'POST' },
   );
+}
+
+// ── Schema Evolution API ─────────────────────────────────────────
+
+/** Compute diff between two ontology versions. */
+export async function computeOntologyDiff(
+  baseVersionId: number,
+  targetVersionId: number,
+): Promise<OntologyDiff> {
+  return request<OntologyDiff>(
+    `${BASE}/ontology/diff?base_version_id=${baseVersionId}&target_version_id=${targetVersionId}`,
+    { method: 'POST' },
+  );
+}
+
+/** Compute diff + impact analysis against live KG. */
+export async function computeImpact(
+  baseVersionId: number,
+  targetVersionId: number,
+): Promise<{ diff: OntologyDiff; impact: import('@/types/ontology').ImpactAnalysis }> {
+  return request(
+    `${BASE}/ontology/impact?base_version_id=${baseVersionId}&target_version_id=${targetVersionId}`,
+    { method: 'POST' },
+  );
+}
+
+/** Start incremental migration job. */
+export async function startMigration(
+  baseVersionId: number,
+  targetVersionId: number,
+  erd: ERDSchema,
+  dryRun: boolean = false,
+  csvSessionId?: string,
+): Promise<MigrationResponse> {
+  const payload: Record<string, unknown> = {
+    base_version_id: baseVersionId,
+    target_version_id: targetVersionId,
+    erd,
+    dry_run: dryRun,
+  };
+  if (csvSessionId) payload.csv_session_id = csvSessionId;
+  return request<MigrationResponse>(`${BASE}/kg/migrate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }, undefined, LONG_TIMEOUT_MS);
+}
+
+/** Poll migration job status. */
+export async function getMigrationStatus(
+  jobId: string,
+): Promise<MigrationResponse> {
+  return request<MigrationResponse>(`${BASE}/kg/migrate/${jobId}`);
 }

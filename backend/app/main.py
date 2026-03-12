@@ -10,8 +10,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth import APIKeyMiddleware
 from app.logging_config import setup_logging
+from app.metrics import PrometheusMiddleware
 from app.rate_limit import RateLimitMiddleware
 from app.request_context import RequestContextMiddleware
+from app.security_headers import SecurityHeadersMiddleware
 
 # Initialize structured logging before anything else
 setup_logging(env=os.getenv("APP_ENV", "development"))
@@ -28,6 +30,8 @@ from app.exceptions import (
     LLMEnrichmentError,
     LocalSearchError,
     MappingValidationError,
+    MigrationError,
+    MigrationNotFoundError,
     OWLReasoningError,
     OntologyGenerationError,
     QueryRoutingError,
@@ -45,6 +49,8 @@ from app.exceptions import (
     llm_enrichment_error_handler,
     local_search_error_handler,
     mapping_validation_error_handler,
+    migration_error_handler,
+    migration_not_found_handler,
     owl_reasoning_error_handler,
     ontology_generation_error_handler,
     query_routing_error_handler,
@@ -52,7 +58,7 @@ from app.exceptions import (
     version_not_found_handler,
     wisdom_error_handler,
 )
-from app.routers import csv_upload, ddl, documents, evaluation, graph, health, kg_build, mapping, ontology, ontology_versions, owl, query, sse, wisdom
+from app.routers import csv_upload, ddl, documents, evaluation, graph, health, kg_build, mapping, migration, ontology, ontology_versions, owl, query, sse, wisdom
 
 logger = logging.getLogger(__name__)
 
@@ -64,12 +70,18 @@ def create_app() -> FastAPI:
         description="ERD → Knowledge Graph → GraphRAG",
     )
 
+    # Security headers (CSP, HSTS, X-Content-Type-Options, etc.)
+    application.add_middleware(SecurityHeadersMiddleware)
+
     # Rate limiting (production only, outermost → checked first)
     if os.getenv("APP_ENV", "development") == "production":
         application.add_middleware(RateLimitMiddleware, rate=60, window=60)
 
     # Auth middleware (must be added before CORS)
     application.add_middleware(APIKeyMiddleware)
+
+    # Prometheus HTTP metrics — pure ASGI
+    application.add_middleware(PrometheusMiddleware)
 
     # Request context (request_id + latency logging) — pure ASGI, no body issues
     application.add_middleware(RequestContextMiddleware)
@@ -104,6 +116,8 @@ def create_app() -> FastAPI:
     application.add_exception_handler(DocumentNotFoundError, document_not_found_handler)
     application.add_exception_handler(EmbeddingError, embedding_error_handler)
     application.add_exception_handler(OWLReasoningError, owl_reasoning_error_handler)
+    application.add_exception_handler(MigrationNotFoundError, migration_not_found_handler)
+    application.add_exception_handler(MigrationError, migration_error_handler)
 
     # Routers
     application.include_router(health.router)
@@ -120,6 +134,18 @@ def create_app() -> FastAPI:
     application.include_router(sse.router)
     application.include_router(documents.router)
     application.include_router(owl.router)
+    application.include_router(migration.router)
+
+    # Prometheus /metrics endpoint
+    from app.metrics import metrics_endpoint
+    application.get("/metrics", tags=["observability"])(lambda: metrics_endpoint())
+
+    # OpenTelemetry tracing (optional — requires opentelemetry packages)
+    try:
+        from app.telemetry import setup_telemetry
+        setup_telemetry(application)
+    except Exception:
+        logger.debug("OpenTelemetry setup skipped", exc_info=True)
 
     # Startup: ensure PG table + run migrations
     @application.on_event("startup")

@@ -257,3 +257,35 @@ async def owl_reasoning_error_handler(
     _request: Request, exc: OWLReasoningError
 ) -> JSONResponse:
     return JSONResponse(status_code=502, content={"detail": exc.detail})
+
+
+# ── Schema Evolution ────────────────────────────────────────────────────
+
+
+class MigrationNotFoundError(Exception):
+    """Raised when a migration job is not found."""
+
+    def __init__(self, job_id: str):
+        self.detail = f"Migration job {job_id} not found"
+        self.job_id = job_id
+        super().__init__(self.detail)
+
+
+async def migration_not_found_handler(
+    _request: Request, exc: MigrationNotFoundError
+) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": exc.detail})
+
+
+class MigrationError(Exception):
+    """Raised when migration execution fails."""
+
+    def __init__(self, detail: str = "Migration failed"):
+        self.detail = detail
+        super().__init__(detail)
+
+
+async def migration_error_handler(
+    _request: Request, exc: MigrationError
+) -> JSONResponse:
+    return JSONResponse(status_code=500, content={"detail": exc.detail})

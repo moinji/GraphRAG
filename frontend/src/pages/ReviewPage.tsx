@@ -14,6 +14,7 @@ import EditRelationshipDialog from '@/components/review/EditRelationshipDialog';
 import CSVUploadSection from '@/components/review/CSVUploadSection';
 import BuildKGActions from '@/components/review/BuildKGActions';
 import OWLPanel from '@/components/review/OWLPanel';
+import SchemaDiffPanel from '@/components/review/SchemaDiffPanel';
 import { updateVersion, approveVersion, startKGBuild, uploadCSVFiles, resetGraph, generateMapping, updateMapping, APIError } from '@/api/client';
 import { streamKGBuild } from '@/api/sse';
 import type {
@@ -414,6 +415,7 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
               <TabsTrigger value="mapping">매핑 (YAML)</TabsTrigger>
               <TabsTrigger value="changes">변경 사항</TabsTrigger>
               <TabsTrigger value="owl">OWL / SHACL</TabsTrigger>
+              <TabsTrigger value="evolution">스키마 진화</TabsTrigger>
             </TabsList>
 
             <TabsContent value="nodes" className="mt-4">
@@ -531,6 +533,17 @@ export default function ReviewPage({ result, erd, onGoToQuery }: ReviewPageProps
 
             <TabsContent value="owl" className="mt-4">
               <OWLPanel versionId={versionId} locked={locked} />
+            </TabsContent>
+
+            <TabsContent value="evolution" className="mt-4">
+              <SchemaDiffPanel
+                currentVersionId={versionId ? versionId - 1 : null}
+                targetVersionId={versionId}
+                erd={erd}
+                onMigrationComplete={() => {
+                  toast.success('Migration complete — KG updated');
+                }}
+              />
             </TabsContent>
           </Tabs>
 

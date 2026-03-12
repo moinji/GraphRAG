@@ -416,3 +416,80 @@ class WisdomResponse(BaseModel):
     cypher_queries_used: list[str] = []
     latency_ms: int = 0
     llm_tokens_used: int = 0
+
+
+# ── Schema Evolution ──────────────────────────────────────────────
+
+
+class PropertyChange(BaseModel):
+    name: str
+    change_type: str  # added | removed | modified
+    old_value: str | None = None
+    new_value: str | None = None
+
+
+class NodeTypeDiff(BaseModel):
+    name: str
+    change_type: str  # added | removed | modified
+    source_table: str = ""
+    property_changes: list[PropertyChange] = []
+
+
+class RelationshipTypeDiff(BaseModel):
+    name: str
+    change_type: str  # added | removed | modified
+    source_node: str = ""
+    target_node: str = ""
+    property_changes: list[PropertyChange] = []
+    endpoint_changed: bool = False
+
+
+class OntologyDiff(BaseModel):
+    base_version_id: int
+    target_version_id: int
+    node_diffs: list[NodeTypeDiff]
+    relationship_diffs: list[RelationshipTypeDiff]
+    summary: str
+    is_breaking: bool = False
+
+
+class ImpactAnalysis(BaseModel):
+    affected_node_counts: dict[str, int] = {}
+    affected_relationship_counts: dict[str, int] = {}
+    total_affected_nodes: int = 0
+    total_affected_relationships: int = 0
+    warnings: list[str] = []
+    estimated_duration_seconds: float = 0.0
+
+
+class MigrationRequest(BaseModel):
+    base_version_id: int
+    target_version_id: int
+    erd: ERDSchema
+    csv_session_id: str | None = None
+    dry_run: bool = False
+
+
+class MigrationProgress(BaseModel):
+    current_step: str = ""
+    step_number: int = 0
+    total_steps: int = 6
+    nodes_added: int = 0
+    nodes_removed: int = 0
+    relationships_added: int = 0
+    relationships_removed: int = 0
+    properties_modified: int = 0
+    duration_seconds: float = 0.0
+
+
+class MigrationResponse(BaseModel):
+    migration_job_id: str
+    status: str  # queued | running | succeeded | failed
+    diff: OntologyDiff | None = None
+    impact: ImpactAnalysis | None = None
+    progress: MigrationProgress | None = None
+    error: KGBuildErrorDetail | None = None
+    base_version_id: int
+    target_version_id: int
+    started_at: str | None = None
+    completed_at: str | None = None
