@@ -57,6 +57,95 @@ def _is_korean(text: str) -> bool:
     return bool(_HANGUL_RE.search(text))
 
 
+def run_query_stream(
+    question: str, tenant_id: str | None = None,
+):
+    """Streaming Mode A pipeline — yields SSE event dicts.
+
+    Yields:
+        {"_event": "metadata", "route": ..., "template_id": ..., "matched_by": ...}
+        {"_event": "complete", **QueryResponse fields}
+    """
+    start_time = time.time()
+
+    # Demo cache → immediate complete
+    if tenant_id is None:
+        from app.query.demo_cache import get_cached_answer
+
+        cached = get_cached_answer(question)
+        if cached is not None:
+            yield {"_event": "complete", **cached.model_dump()}
+            return
+
+    # LRU cache → immediate complete
+    lru_hit = _cache_get(question, tenant_id)
+    if lru_hit is not None:
+        yield {"_event": "complete", **lru_hit.model_dump()}
+        return
+
+    # 1. Route
+    template_id, route, slots, params, matched_by = route_question(question, tenant_id=tenant_id)
+
+    # Yield routing metadata
+    yield {
+        "_event": "metadata",
+        "template_id": template_id,
+        "route": route,
+        "matched_by": matched_by,
+        "mode": "a",
+    }
+
+    # Unsupported → early complete
+    if route == "unsupported":
+        latency_ms = int((time.time() - start_time) * 1000)
+        unsupported_msg = (
+            "이 질문 유형은 아직 지원하지 않습니다."
+            if _is_korean(question)
+            else "This question type is not yet supported."
+        )
+        yield {
+            "_event": "complete",
+            **QueryResponse(
+                question=question,
+                answer=unsupported_msg,
+                cypher="",
+                paths=[],
+                template_id="",
+                route="unsupported",
+                matched_by="none",
+                error="No matching template found",
+                mode="a",
+                latency_ms=latency_ms,
+            ).model_dump(),
+        }
+        return
+
+    # 2-6: Slot fill → Cypher → Neo4j → paths → answer → node IDs
+    cypher, neo4j_params = fill_template(template_id, slots, params)
+    records = _execute_cypher(cypher, neo4j_params)
+    paths = _extract_paths(records, template_id, slots, params)
+    answer = _generate_answer(question, records, template_id, slots, params)
+    related_node_ids = _extract_related_node_ids(records, template_id, slots, params)
+
+    latency_ms = int((time.time() - start_time) * 1000)
+    response = QueryResponse(
+        question=question,
+        answer=answer,
+        cypher=cypher,
+        paths=paths,
+        template_id=template_id,
+        route=route,
+        matched_by=matched_by,
+        error=None,
+        mode="a",
+        latency_ms=latency_ms,
+        related_node_ids=related_node_ids,
+    )
+
+    _cache_put(question, tenant_id, response)
+    yield {"_event": "complete", **response.model_dump()}
+
+
 def run_query(
     question: str, mode: str = "a", tenant_id: str | None = None,
 ) -> QueryResponse:

@@ -121,26 +121,20 @@ async def test_query_stream_empty_question(client: AsyncClient):
 
 @pytest.mark.anyio
 async def test_query_stream_mode_a(client: AsyncClient):
-    """Mode A yields single complete event."""
-    mock_result = MagicMock()
-    mock_result.model_dump_json.return_value = json.dumps({
-        "question": "test", "answer": "result", "cypher": "",
-        "paths": [], "template_id": "", "route": "unsupported",
-        "matched_by": "none", "error": None, "mode": "a",
-        "subgraph_context": None, "llm_tokens_used": None,
-        "latency_ms": 10, "cached": False, "related_node_ids": [],
-    })
+    """Mode A yields metadata + complete events."""
+    fake_events = [
+        {"_event": "metadata", "template_id": "two_hop", "route": "traverse", "matched_by": "rule", "mode": "a"},
+        {
+            "_event": "complete",
+            "question": "test", "answer": "result", "cypher": "MATCH ...",
+            "paths": [], "template_id": "two_hop", "route": "traverse",
+            "matched_by": "rule", "error": None, "mode": "a",
+            "subgraph_context": None, "llm_tokens_used": None,
+            "latency_ms": 10, "cached": False, "related_node_ids": [],
+        },
+    ]
 
-    with patch("app.routers.sse.asyncio") as mock_asyncio:
-        # Mock asyncio.to_thread to return our mock result
-        import asyncio as real_asyncio
-
-        async def fake_to_thread(fn, *args, **kwargs):
-            return mock_result
-
-        mock_asyncio.to_thread = fake_to_thread
-        mock_asyncio.sleep = real_asyncio.sleep
-
+    with patch("app.query.pipeline.run_query_stream", return_value=iter(fake_events)):
         async with client.stream("POST", "/api/v1/query/stream",
                                   json={"question": "test question", "mode": "a"}) as resp:
             assert resp.status_code == 200
@@ -150,6 +144,7 @@ async def test_query_stream_mode_a(client: AsyncClient):
                     events.append(line.split("event: ")[1])
                 if "complete" in events:
                     break
+            assert "metadata" in events
             assert "complete" in events
 
 
@@ -179,24 +174,14 @@ async def test_query_stream_mode_b_unsupported(client: AsyncClient):
 @pytest.mark.anyio
 async def test_query_stream_content_type(client: AsyncClient):
     """SSE response has correct content-type."""
-    mock_result = MagicMock()
-    mock_result.model_dump_json.return_value = json.dumps({
-        "question": "test", "answer": "ok", "cypher": "",
-        "paths": [], "template_id": "", "route": "unsupported",
-        "matched_by": "none", "error": None, "mode": "a",
-        "subgraph_context": None, "llm_tokens_used": None,
-        "latency_ms": 5, "cached": False, "related_node_ids": [],
-    })
+    fake_events = [
+        {"_event": "complete", "question": "test", "answer": "ok", "cypher": "",
+         "paths": [], "template_id": "", "route": "unsupported",
+         "matched_by": "none", "error": None, "mode": "a",
+         "latency_ms": 5, "cached": False, "related_node_ids": []},
+    ]
 
-    import asyncio as real_asyncio
-
-    async def fake_to_thread(fn, *args, **kwargs):
-        return mock_result
-
-    with patch("app.routers.sse.asyncio") as mock_asyncio:
-        mock_asyncio.to_thread = fake_to_thread
-        mock_asyncio.sleep = real_asyncio.sleep
-
+    with patch("app.query.pipeline.run_query_stream", return_value=iter(fake_events)):
         async with client.stream("POST", "/api/v1/query/stream",
                                   json={"question": "hello", "mode": "a"}) as resp:
             assert "text/event-stream" in resp.headers.get("content-type", "")

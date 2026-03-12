@@ -107,15 +107,34 @@ export default function QueryPage({ onBack }: QueryPageProps) {
           },
         });
       } else {
-        // Mode A: regular fetch
-        const data = await sendQuery(question, mode);
-        const assistantMsg: ChatMessage = {
-          id: msgId(), role: 'assistant',
-          content: data.answer,
-          data,
-        };
-        setMessages((prev) => [...prev, assistantMsg]);
-        setSending(false);
+        // Mode A: SSE streaming (metadata → complete)
+        const asstId = msgId();
+        const placeholder: ChatMessage = { id: asstId, role: 'assistant', content: '', streaming: true };
+        setMessages((prev) => [...prev, placeholder]);
+
+        timeoutRef.current = setTimeout(() => {
+          abortRef.current?.abort();
+          updateMsg(asstId, { streaming: false });
+          setSending(false);
+        }, SSE_STREAM_TIMEOUT_MS);
+
+        abortRef.current = streamQuery(question, mode, {
+          onMetadata: (meta) => {
+            updateMsg(asstId, { data: meta as QueryResponse });
+          },
+          onComplete: (data) => {
+            updateMsg(asstId, { content: data.answer, data, streaming: false });
+            cleanupStream();
+          },
+          onError: (error) => {
+            setMessages((prev) => prev.map((m) =>
+              m.id === asstId
+                ? { ...m, content: m.content || error.message, streaming: false }
+                : m,
+            ));
+            cleanupStream();
+          },
+        });
       }
     } catch (e) {
       const errorMsg: ChatMessage = {

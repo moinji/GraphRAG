@@ -82,8 +82,27 @@ async def _query_stream_generator(
     Mode "a": fast template-based → single 'complete' event.
     Mode "b": LLM streaming → 'metadata' + 'token'* + 'complete' events.
     """
-    if mode != "b":
-        # Mode "a" / "w": run synchronously and return single event
+    if mode == "a":
+        # Mode "a": streaming template pipeline (metadata → complete)
+        from app.query.pipeline import run_query_stream
+
+        try:
+            for event in await asyncio.to_thread(
+                lambda: list(run_query_stream(question, tenant_id=tenant_id)),
+            ):
+                if await request.is_disconnected():
+                    return
+                event_type = event.pop("_event", "complete")
+                yield {"event": event_type, "data": json.dumps(event, ensure_ascii=False)}
+        except CypherExecutionError as e:
+            yield {"event": "error", "data": json.dumps({"detail": e.detail})}
+        except Exception as e:
+            logger.error("Mode A stream error: %s", e, exc_info=True)
+            yield {"event": "error", "data": json.dumps({"detail": str(e)})}
+        return
+
+    if mode not in ("b",):
+        # Mode "c" / "w" / other: run synchronously and return single event
         from app.query.pipeline import run_query
         result = await asyncio.to_thread(run_query, question, mode=mode, tenant_id=tenant_id)
         yield {"event": "complete", "data": result.model_dump_json()}
@@ -114,7 +133,7 @@ async def stream_query(req: QueryRequest, request: Request) -> EventSourceRespon
     question = req.question.strip()
     if not question:
         raise QueryRoutingError("Question cannot be empty")
-    mode = req.mode if req.mode in ("a", "b") else "a"
+    mode = req.mode if req.mode in ("a", "b", "c", "w") else "a"
     tenant_id = get_tenant_id(request)
 
     return EventSourceResponse(
