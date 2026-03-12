@@ -18,14 +18,49 @@ DEFAULT_DIMENSION = 1536
 
 
 def get_embedding_dimension() -> int:
-    """Return the dimension of the configured embedding model."""
-    model = getattr(settings, "embedding_model", "text-embedding-3-small")
-    dim_map = {
-        "text-embedding-3-small": 1536,
-        "text-embedding-3-large": 3072,
-        "text-embedding-ada-002": 1536,
+    """Return the dimension of the configured embedding model.
+
+    If OpenAI is unavailable (quota exceeded, no key), falls back to local model
+    which uses a different dimension (384 for all-MiniLM-L6-v2).
+    """
+    # If OpenAI is available, use its dimension
+    if settings.openai_api_key:
+        model = getattr(settings, "embedding_model", "text-embedding-3-small")
+        dim_map = {
+            "text-embedding-3-small": 1536,
+            "text-embedding-3-large": 3072,
+            "text-embedding-ada-002": 1536,
+        }
+        # Check if OpenAI actually works (cache the result)
+        if _openai_available():
+            return dim_map.get(model, DEFAULT_DIMENSION)
+
+    # Local model dimension
+    local_dim_map = {
+        "all-MiniLM-L6-v2": 384,
+        "all-mpnet-base-v2": 768,
+        "paraphrase-multilingual-MiniLM-L12-v2": 384,
     }
-    return dim_map.get(model, DEFAULT_DIMENSION)
+    local_model = getattr(settings, "local_embedding_model", "all-MiniLM-L6-v2")
+    return local_dim_map.get(local_model, 384)
+
+
+_openai_ok: bool | None = None
+
+
+def _openai_available() -> bool:
+    """Check if OpenAI embedding API is actually reachable (cached)."""
+    global _openai_ok
+    if _openai_ok is not None:
+        return _openai_ok
+    try:
+        import openai
+        client = openai.OpenAI(api_key=settings.openai_api_key)
+        client.embeddings.create(model="text-embedding-3-small", input=["test"])
+        _openai_ok = True
+    except Exception:
+        _openai_ok = False
+    return _openai_ok
 
 
 def embed_texts(texts: list[str]) -> list[list[float]]:

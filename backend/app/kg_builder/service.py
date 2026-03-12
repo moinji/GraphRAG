@@ -266,13 +266,20 @@ def run_kg_build(
             completed_at=completed_str,
         )
 
-        # Clean partial graph (best-effort)
+        # Clean partial graph (best-effort, tenant-scoped)
         try:
             from app.db.neo4j_client import get_driver
+            from app.tenant import prefixed_label, tenant_label_prefix
 
             driver = get_driver()
             with driver.session() as session:
-                session.run("MATCH (n) DETACH DELETE n")
+                prefix = tenant_label_prefix(tenant_id)
+                if prefix:
+                    for nt in ontology.node_types:
+                        lbl = prefixed_label(tenant_id, nt.name)
+                        session.run(f"MATCH (n:`{lbl}`) DETACH DELETE n")
+                else:
+                    session.run("MATCH (n) DETACH DELETE n")
         except Exception:
             logger.warning("Failed to clean partial graph", exc_info=True)
 

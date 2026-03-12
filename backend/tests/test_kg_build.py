@@ -272,3 +272,76 @@ async def test_pg_store_best_effort(api_client: AsyncClient, ecommerce_erd: ERDS
     resp = await api_client.get(f"/api/v1/kg/build/{job_id}")
     assert resp.status_code == 200
     assert resp.json()["status"] == "succeeded"
+
+
+# ════════════════════════════════════════════════════════════════════
+#  Tenant isolation — failure cleanup
+# ════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.anyio
+async def test_failure_cleanup_scoped_to_tenant(ecommerce_erd: ERDSchema):
+    """#11: Build failure cleanup only deletes tenant-scoped labels."""
+    from app.kg_builder.service import create_job, run_kg_build
+    from app.ontology.fk_rule_engine import build_ontology
+
+    ontology = build_ontology(ecommerce_erd)
+    job_id = "test_tenant_cleanup"
+    create_job(job_id, 1)
+
+    mock_session = MagicMock()
+    mock_driver = MagicMock()
+    mock_driver.session.return_value.__enter__ = MagicMock(return_value=mock_session)
+    mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
+
+    with (
+        patch(
+            "app.kg_builder.service.load_to_neo4j",
+            side_effect=ConnectionError("fail"),
+        ),
+        patch("app.db.neo4j_client.get_driver", return_value=mock_driver),
+    ):
+        run_kg_build(job_id, 1, ecommerce_erd, ontology, tenant_id="acme")
+
+    # Should have called DELETE with prefixed labels, NOT global MATCH (n) DETACH DELETE n
+    calls = [str(c) for c in mock_session.run.call_args_list]
+    assert any("t_acme_" in c for c in calls), f"Expected tenant-scoped cleanup, got: {calls}"
+    assert not any(
+        "MATCH (n) DETACH DELETE n" in c for c in calls
+    ), "Global DETACH DELETE must not be used in multi-tenant mode"
+
+
+@pytest.mark.anyio
+async def test_failure_cleanup_global_when_no_tenant(ecommerce_erd: ERDSchema):
+    """#12: Build failure cleanup uses global delete when tenant_id is None (single-tenant)."""
+    from app.kg_builder.service import create_job, run_kg_build
+    from app.ontology.fk_rule_engine import build_ontology
+
+    ontology = build_ontology(ecommerce_erd)
+    job_id = "test_no_tenant_cleanup"
+    create_job(job_id, 1)
+
+    mock_session = MagicMock()
+    mock_driver = MagicMock()
+    mock_driver.session.return_value.__enter__ = MagicMock(return_value=mock_session)
+    mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
+
+    with (
+        patch(
+            "app.kg_builder.service.load_to_neo4j",
+            side_effect=ConnectionError("fail"),
+        ),
+        patch("app.db.neo4j_client.get_driver", return_value=mock_driver),
+    ):
+        run_kg_build(job_id, 1, ecommerce_erd, ontology, tenant_id=None)
+
+    calls = [str(c) for c in mock_session.run.call_args_list]
+    assert any("MATCH (n) DETACH DELETE n" in c for c in calls)
+
+
+@pytest.mark.anyio
+async def test_tenant_label_prefix_none_returns_empty():
+    """#13: tenant_label_prefix(None) → empty string."""
+    from app.tenant import tenant_label_prefix
+    assert tenant_label_prefix(None) == ""
+    assert tenant_label_prefix("acme") == "t_acme_"

@@ -23,8 +23,8 @@ jobs:
       - name: Install dependencies
         run: pip install -r ../requirements.txt
 
-      - name: Run tests
-        run: python -m pytest tests/ --tb=short -q
+      - name: Run tests with coverage
+        run: python -m pytest tests/ --tb=short -q --cov=app --cov-report=term-missing --cov-fail-under=50
 
   frontend-build:
     runs-on: ubuntu-latest

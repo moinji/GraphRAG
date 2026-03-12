@@ -49,7 +49,9 @@ def run_migrations() -> None:
     # v5.0: ensure vector tables (pgvector extension + documents + chunks)
     try:
         from app.db.vector_store import ensure_vector_tables
+        from app.document.embedder import get_embedding_dimension
 
-        ensure_vector_tables()
+        dim = get_embedding_dimension()
+        ensure_vector_tables(dimension=dim)
     except Exception:
         logger.warning("Failed to ensure vector tables", exc_info=True)
