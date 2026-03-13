@@ -11,6 +11,8 @@ import re
 import time
 from typing import AsyncGenerator
 
+from app.cache import cache, make_key
+from app.circuit_breaker import neo4j_breaker
 from app.config import settings
 from app.db.neo4j_client import get_driver
 from app.exceptions import LocalSearchError
@@ -27,10 +29,6 @@ logger = logging.getLogger(__name__)
 
 # ── Fallback entities (empty — dynamic loading from Neo4j is primary) ──
 _FALLBACK_ENTITIES: dict[str, set[str]] = {}
-
-# Dynamic entity cache (populated from Neo4j), keyed by tenant_id
-_entity_cache: dict[str | None, dict[str, set[str]]] = {}
-_entity_cache_ts: dict[str | None, float] = {}
 _ENTITY_CACHE_TTL = 300  # 5 minutes
 
 
@@ -38,13 +36,16 @@ def _load_entities_from_neo4j(tenant_id: str | None = None) -> dict[str, set[str
     """Query Neo4j for all node labels and their name properties."""
     from app.tenant import tenant_label_prefix
 
-    now = time.time()
-    cached = _entity_cache.get(tenant_id)
-    cached_ts = _entity_cache_ts.get(tenant_id, 0.0)
-    if cached is not None and (now - cached_ts) < _ENTITY_CACHE_TTL:
-        return cached
+    cache_key = make_key("entities", tenant_id)
+    cached_raw = cache.get(cache_key)
+    if cached_raw is not None:
+        # Convert lists back to sets
+        return {k: set(v) for k, v in cached_raw.items()}
 
     prefix = tenant_label_prefix(tenant_id)
+
+    if not neo4j_breaker.allow_request():
+        return _FALLBACK_ENTITIES
 
     try:
         driver = get_driver()
@@ -74,12 +75,15 @@ def _load_entities_from_neo4j(tenant_id: str | None = None) -> dict[str, set[str
                     entities[label] = names
         if not entities:
             # Neo4j is empty (no data loaded yet), use fallback
+            neo4j_breaker.record_success()
             return _FALLBACK_ENTITIES
-        _entity_cache[tenant_id] = entities
-        _entity_cache_ts[tenant_id] = now
+        # Store as lists (JSON-serializable), converted back on get
+        cache.set(cache_key, {k: list(v) for k, v in entities.items()}, ttl=_ENTITY_CACHE_TTL)
         logger.debug("Loaded %d entity types from Neo4j (tenant=%s)", len(entities), tenant_id)
+        neo4j_breaker.record_success()
         return entities
     except Exception:
+        neo4j_breaker.record_failure()
         logger.warning("Failed to load entities from Neo4j, using fallback", exc_info=True)
         return _FALLBACK_ENTITIES
 
@@ -87,11 +91,9 @@ def _load_entities_from_neo4j(tenant_id: str | None = None) -> dict[str, set[str
 def invalidate_entity_cache(tenant_id: str | None = None) -> None:
     """Clear the entity cache (call after KG rebuild)."""
     if tenant_id is not None:
-        _entity_cache.pop(tenant_id, None)
-        _entity_cache_ts.pop(tenant_id, None)
+        cache.delete(make_key("entities", tenant_id))
     else:
-        _entity_cache.clear()
-        _entity_cache_ts.clear()
+        cache.delete_prefix("graphrag:entities:")
 
 
 # Aggregate question patterns (no specific entity anchor)
@@ -293,15 +295,21 @@ def _build_generic_aggregate(tenant_id: str | None = None) -> str | None:
 
 
 def _execute_neo4j(cypher: str, params: dict | None = None) -> list[dict]:
-    """Execute Cypher against Neo4j."""
+    """Execute Cypher against Neo4j with circuit breaker protection."""
+    if not neo4j_breaker.allow_request():
+        raise LocalSearchError(
+            "Neo4j circuit breaker is OPEN — service temporarily unavailable"
+        )
     params = params or {}
     try:
         driver = get_driver()
         with driver.session() as session:
             result = session.run(cypher, **params)
             records = [dict(r) for r in result]
+        neo4j_breaker.record_success()
         return records
     except Exception as e:
+        neo4j_breaker.record_failure()
         raise LocalSearchError(f"Neo4j execution failed: {e}")
 
 

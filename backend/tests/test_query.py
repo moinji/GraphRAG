@@ -228,7 +228,7 @@ async def test_query_api_unsupported(api_client: AsyncClient):
 
 @pytest.mark.anyio
 async def test_query_api_neo4j_failure(api_client: AsyncClient):
-    """#14: Neo4j failure → 502 (non-cached question)."""
+    """#14: Neo4j failure → graceful degradation (200 with degraded=True)."""
     from app.exceptions import CypherExecutionError
     from app.query.pipeline import invalidate_query_cache
 
@@ -243,8 +243,10 @@ async def test_query_api_neo4j_failure(api_client: AsyncClient):
             "/api/v1/query",
             json={"question": "고객 이영희가 주문한 상품은?"},
         )
-    assert resp.status_code == 502
-    assert "Connection refused" in resp.json()["detail"]
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["degraded"] is True
+    assert data["error"] == "neo4j_unavailable"
 
 
 @pytest.mark.anyio

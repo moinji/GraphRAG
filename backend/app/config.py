@@ -69,6 +69,14 @@ class Settings(BaseSettings):
     doc_chunk_overlap: int = 200     # characters
     doc_chunk_strategy: str = "recursive"  # recursive | fixed | sentence
 
+    # Redis (optional — in-memory fallback when unset)
+    redis_url: str | None = None  # e.g. redis://localhost:6379/0
+
+    # Rate limiting
+    rate_limit_enabled: bool = True  # Set False to disable
+    rate_limit_rate: int = 60  # requests per window
+    rate_limit_window: int = 60  # window in seconds
+
     # App
     port: int = 8080  # Cloud Run uses PORT env var
     app_env: str = "development"

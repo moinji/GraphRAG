@@ -204,6 +204,7 @@ export interface QueryResponse {
   llm_tokens_used: number | null;
   latency_ms: number | null;
   cached: boolean;
+  degraded: boolean;
   related_node_ids: string[];
   document_sources: DocumentSource[];
 }

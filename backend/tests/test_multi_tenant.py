@@ -90,39 +90,33 @@ def test_get_tenant_map_valid(monkeypatch):
 
 def test_invalidate_entity_cache_all():
     """invalidate_entity_cache(None) clears all entries."""
-    from app.query.local_search import (
-        _entity_cache,
-        _entity_cache_ts,
-        invalidate_entity_cache,
-    )
-    # Seed some cache data
-    _entity_cache["acme"] = {"Customer": {"Alice"}}
-    _entity_cache["beta"] = {"Product": {"Widget"}}
-    _entity_cache_ts["acme"] = 1.0
-    _entity_cache_ts["beta"] = 1.0
+    from app.cache import cache, make_key
+    from app.query.local_search import invalidate_entity_cache
+
+    # Seed cache data via unified cache layer
+    cache.set(make_key("entities", "acme"), {"Customer": ["Alice"]})
+    cache.set(make_key("entities", "beta"), {"Product": ["Widget"]})
 
     invalidate_entity_cache(None)  # clear all
 
-    assert len(_entity_cache) == 0
-    assert len(_entity_cache_ts) == 0
+    assert cache.get(make_key("entities", "acme")) is None
+    assert cache.get(make_key("entities", "beta")) is None
 
 
 def test_invalidate_entity_cache_specific():
     """invalidate_entity_cache('acme') clears only that tenant."""
-    from app.query.local_search import (
-        _entity_cache,
-        _entity_cache_ts,
-        invalidate_entity_cache,
-    )
-    _entity_cache["acme"] = {"Customer": {"Alice"}}
-    _entity_cache["beta"] = {"Product": {"Widget"}}
-    _entity_cache_ts["acme"] = 1.0
-    _entity_cache_ts["beta"] = 1.0
+    from app.cache import cache, make_key
+    from app.query.local_search import invalidate_entity_cache
+
+    cache.set(make_key("entities", "acme"), {"Customer": ["Alice"]})
+    cache.set(make_key("entities", "beta"), {"Product": ["Widget"]})
 
     invalidate_entity_cache("acme")
 
-    assert "acme" not in _entity_cache
-    assert "beta" in _entity_cache
+    assert cache.get(make_key("entities", "acme")) is None
+    assert cache.get(make_key("entities", "beta")) is not None
+    # Cleanup
+    cache.delete(make_key("entities", "beta"))
 
 
 # ── Auth middleware tests ────────────────────────────────────────

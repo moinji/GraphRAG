@@ -4,11 +4,13 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import UploadPage from '@/pages/UploadPage';
 import ReviewPage from '@/pages/ReviewPage';
 import OnboardingTour from '@/components/OnboardingTour';
+import { LocaleToggle } from '@/i18n';
 import type { ERDSchema, OntologyGenerateResponse } from '@/types/ontology';
 
 const QueryPage = lazy(() => import('@/pages/QueryPage'));
 const ExplorePage = lazy(() => import('@/pages/ExplorePage'));
 const DocumentsPage = lazy(() => import('@/pages/DocumentsPage'));
+const DashboardPage = lazy(() => import('@/pages/DashboardPage'));
 
 const Loading = () => (
   <div className="flex items-center justify-center h-40 text-muted-foreground">로딩 중...</div>
@@ -69,6 +71,16 @@ function App() {
               </button>
             )}
             <button
+              onClick={() => navigate('/dashboard')}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                location.pathname === '/dashboard'
+                  ? 'bg-green-600 text-white'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+              }`}
+            >
+              Dashboard
+            </button>
+            <button
               onClick={() => navigate('/documents')}
               className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                 location.pathname === '/documents'
@@ -88,6 +100,7 @@ function App() {
             >
               그래프 탐색
             </button>
+            <LocaleToggle />
           </nav>
         </div>
       </header>
@@ -122,6 +135,14 @@ function App() {
             element={
               <Suspense fallback={<Loading />}>
                 <QueryPage onBack={handleBackToReview} />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/dashboard"
+            element={
+              <Suspense fallback={<Loading />}>
+                <DashboardPage onBack={() => navigate(-1)} />
               </Suspense>
             }
           />

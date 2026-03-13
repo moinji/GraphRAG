@@ -1,0 +1,13 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - frontend/Dockerfile
+      - -t
+      - asia-northeast3-docker.pkg.dev/$PROJECT_ID/graphrag/frontend:latest
+      - .
+images:
+  - asia-northeast3-docker.pkg.dev/$PROJECT_ID/graphrag/frontend:latest
+options:
+  logging: CLOUD_LOGGING_ONLY

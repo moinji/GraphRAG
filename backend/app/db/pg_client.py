@@ -12,6 +12,7 @@ import psycopg2
 import psycopg2.extras
 import psycopg2.pool
 
+from app.circuit_breaker import pg_breaker
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -51,13 +52,28 @@ def _get_pool() -> psycopg2.pool.SimpleConnectionPool:
 
 @contextmanager
 def _get_conn():
-    """Get a PG connection from the pool (auto-returned on exit)."""
-    pool = _get_pool()
-    conn = pool.getconn()
+    """Get a PG connection from the pool with circuit breaker protection."""
+    if not pg_breaker.allow_request():
+        raise psycopg2.OperationalError(
+            "PostgreSQL circuit breaker is OPEN — service temporarily unavailable"
+        )
+    try:
+        pool = _get_pool()
+        conn = pool.getconn()
+    except Exception:
+        pg_breaker.record_failure()
+        raise
     try:
         yield conn
+        pg_breaker.record_success()
+    except psycopg2.OperationalError:
+        pg_breaker.record_failure()
+        raise
     finally:
-        pool.putconn(conn)
+        try:
+            pool.putconn(conn)
+        except Exception:
+            pass
 
 
 def close_pool() -> None:

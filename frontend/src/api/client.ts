@@ -447,3 +447,27 @@ export async function getMigrationStatus(
 ): Promise<MigrationResponse> {
   return request<MigrationResponse>(`${BASE}/kg/migrate/${jobId}`);
 }
+
+// ── Dashboard / Analytics API ────────────────────────────────────
+
+/** Get health status of all services. */
+export async function getHealth(): Promise<Record<string, unknown>> {
+  return request(`${BASE}/health`);
+}
+
+/** Get LLM usage summary. */
+export async function getLLMUsage(): Promise<Record<string, unknown>> {
+  return request(`${BASE}/llm-usage`);
+}
+
+/** Get query analytics (totals, cache hit rate, latency). */
+export async function getQueryAnalytics(): Promise<Record<string, unknown>> {
+  return request(`${BASE}/query/analytics`);
+}
+
+/** Get recent query history. */
+export async function getQueryHistory(
+  limit: number = 20,
+): Promise<{ history: Record<string, unknown>[]; count: number }> {
+  return request(`${BASE}/query/history?limit=${limit}`);
+}

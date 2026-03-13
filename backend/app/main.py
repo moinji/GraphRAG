@@ -58,7 +58,7 @@ from app.exceptions import (
     version_not_found_handler,
     wisdom_error_handler,
 )
-from app.routers import csv_upload, ddl, documents, evaluation, graph, health, kg_build, mapping, migration, ontology, ontology_versions, owl, query, sse, wisdom
+from app.routers import csv_upload, ddl, documents, evaluation, graph, health, jobs, kg_build, mapping, migration, ontology, ontology_versions, owl, query, sse, v2, wisdom
 
 logger = logging.getLogger(__name__)
 
@@ -70,12 +70,21 @@ def create_app() -> FastAPI:
         description="ERD → Knowledge Graph → GraphRAG",
     )
 
+    # API version headers (X-API-Version, Deprecation, Sunset)
+    from app.api_version import APIVersionMiddleware
+    application.add_middleware(APIVersionMiddleware)
+
     # Security headers (CSP, HSTS, X-Content-Type-Options, etc.)
     application.add_middleware(SecurityHeadersMiddleware)
 
-    # Rate limiting (production only, outermost → checked first)
-    if os.getenv("APP_ENV", "development") == "production":
-        application.add_middleware(RateLimitMiddleware, rate=60, window=60)
+    # Rate limiting — per-tenant + per-IP (pure ASGI, config-driven)
+    from app.config import settings as _settings
+    if _settings.rate_limit_enabled:
+        application.add_middleware(
+            RateLimitMiddleware,
+            rate=_settings.rate_limit_rate,
+            window=_settings.rate_limit_window,
+        )
 
     # Auth middleware (must be added before CORS)
     application.add_middleware(APIKeyMiddleware)
@@ -133,8 +142,10 @@ def create_app() -> FastAPI:
     application.include_router(wisdom.router)
     application.include_router(sse.router)
     application.include_router(documents.router)
+    application.include_router(jobs.router)
     application.include_router(owl.router)
     application.include_router(migration.router)
+    application.include_router(v2.router)
 
     # Prometheus /metrics endpoint
     from app.metrics import metrics_endpoint
@@ -172,6 +183,14 @@ def create_app() -> FastAPI:
 
     @application.on_event("shutdown")
     def _shutdown_close_connections() -> None:
+        # Shut down unified job manager (waits for active jobs)
+        try:
+            from app.job_manager import job_manager
+
+            job_manager.shutdown(wait_seconds=30)
+        except Exception:
+            logger.warning("Job manager shutdown failed", exc_info=True)
+
         # Wait for active KG builds before closing connections
         try:
             from app.kg_builder.service import wait_for_active_builds

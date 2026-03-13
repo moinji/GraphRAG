@@ -67,18 +67,24 @@ async def upload_documents(
             errors.append(f"{filename}: empty file")
             continue
 
-        # Schedule background processing
-        background_tasks.add_task(
+        # Schedule background processing via job manager
+        from app.job_manager import job_manager
+
+        job_id = job_manager.submit(
+            "document",
+            tenant_id,
             _process_document_task,
-            filename=filename,
-            content=content,
-            tenant_id=tenant_id,
+            filename,
+            content,
+            tenant_id,
+            metadata={"filename": filename, "size": len(content)},
         )
 
         accepted.append({
             "filename": filename,
             "size": len(content),
             "status": "queued",
+            "job_id": job_id,
         })
 
     return DocumentUploadResponse(

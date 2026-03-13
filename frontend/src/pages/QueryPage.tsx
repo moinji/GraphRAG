@@ -394,6 +394,11 @@ function AssistantDetail({ data }: { data: QueryResponse }) {
             cached
           </Badge>
         )}
+        {data.degraded && (
+          <Badge variant="outline" className="text-xs border-amber-500 text-amber-600">
+            degraded
+          </Badge>
+        )}
       </div>
 
       {/* Latency + tokens (B) */}

@@ -67,6 +67,12 @@ class LLMUsageTracker:
             "LLM usage: caller=%s model=%s tokens=%d cost=$%.4f",
             caller, model, entry.total_tokens, entry.estimated_cost_usd,
         )
+        # Also feed Prometheus counters
+        try:
+            from app.metrics import record_llm_usage
+            record_llm_usage(caller, model, input_tokens, output_tokens)
+        except Exception:
+            pass
 
     def get_summary(self) -> dict:
         """Return aggregated usage summary."""

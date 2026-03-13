@@ -8,13 +8,11 @@ Cached with TTL to avoid repeated DB calls.
 from __future__ import annotations
 
 import logging
-import time
+
+from app.cache import cache, make_key
 
 logger = logging.getLogger(__name__)
 
-# Schema cache keyed by tenant_id
-_schema_cache: dict[str | None, dict] = {}
-_schema_cache_ts: dict[str | None, float] = {}
 _SCHEMA_CACHE_TTL = 300  # 5 minutes
 
 
@@ -32,10 +30,9 @@ def get_graph_schema(tenant_id: str | None = None) -> dict:
 
     Returns empty lists/dicts on failure (non-fatal).
     """
-    now = time.time()
-    cached = _schema_cache.get(tenant_id)
-    cached_ts = _schema_cache_ts.get(tenant_id, 0.0)
-    if cached is not None and (now - cached_ts) < _SCHEMA_CACHE_TTL:
+    cache_key = make_key("schema", tenant_id)
+    cached = cache.get(cache_key)
+    if cached is not None:
         return cached
 
     empty: dict = {
@@ -110,8 +107,7 @@ def get_graph_schema(tenant_id: str | None = None) -> dict:
             except Exception:
                 logger.debug("OWL enrichment skipped", exc_info=True)
 
-            _schema_cache[tenant_id] = schema
-            _schema_cache_ts[tenant_id] = now
+            cache.set(cache_key, schema, ttl=_SCHEMA_CACHE_TTL)
             logger.debug(
                 "Loaded graph schema: %d labels, %d rel types (tenant=%s)",
                 len(schema["node_labels"]),
@@ -128,11 +124,9 @@ def get_graph_schema(tenant_id: str | None = None) -> dict:
 def invalidate_schema_cache(tenant_id: str | None = None) -> None:
     """Clear the schema cache (call after KG rebuild)."""
     if tenant_id is not None:
-        _schema_cache.pop(tenant_id, None)
-        _schema_cache_ts.pop(tenant_id, None)
+        cache.delete(make_key("schema", tenant_id))
     else:
-        _schema_cache.clear()
-        _schema_cache_ts.clear()
+        cache.delete_prefix("graphrag:schema:")
 
 
 def format_schema_for_prompt(schema: dict) -> str:

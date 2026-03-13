@@ -46,6 +46,14 @@ def run_migrations() -> None:
     except Exception:
         logger.warning("Failed to ensure kg_builds table", exc_info=True)
 
+    # Query history log table
+    try:
+        from app.db.query_log import ensure_query_log_table
+
+        ensure_query_log_table()
+    except Exception:
+        logger.warning("Failed to ensure query_log table", exc_info=True)
+
     # v5.0: ensure vector tables (pgvector extension + documents + chunks)
     try:
         from app.db.vector_store import ensure_vector_tables

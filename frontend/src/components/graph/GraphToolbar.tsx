@@ -27,6 +27,8 @@ interface GraphToolbarProps {
   demoQueryLoading?: boolean;
   onReset?: () => void;
   resetLoading?: boolean;
+  onExportPNG?: () => void;
+  onExportJSON?: () => void;
 }
 
 export default function GraphToolbar({
@@ -44,6 +46,8 @@ export default function GraphToolbar({
   demoQueryLoading,
   onReset,
   resetLoading,
+  onExportPNG,
+  onExportJSON,
 }: GraphToolbarProps) {
   const [localSearch, setLocalSearch] = useState(searchTerm);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -119,6 +123,16 @@ export default function GraphToolbar({
           <Badge variant="outline" className="text-amber-600 border-amber-300">
             일부만 표시
           </Badge>
+        )}
+        {onExportPNG && (
+          <Button variant="outline" size="sm" onClick={onExportPNG} disabled={totalNodes === 0} title="PNG 다운로드">
+            PNG
+          </Button>
+        )}
+        {onExportJSON && (
+          <Button variant="outline" size="sm" onClick={onExportJSON} disabled={totalNodes === 0} title="JSON 다운로드">
+            JSON
+          </Button>
         )}
         {onReset && (
           <Button

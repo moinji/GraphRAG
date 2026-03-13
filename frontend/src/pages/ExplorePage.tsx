@@ -4,6 +4,8 @@ import GraphCanvas from '@/components/graph/GraphCanvas';
 import GraphToolbar from '@/components/graph/GraphToolbar';
 import GraphFilterSidebar from '@/components/graph/GraphFilterSidebar';
 import NodeDetailPanel from '@/components/graph/NodeDetailPanel';
+import KGStatsDashboard from '@/components/graph/KGStatsDashboard';
+import GraphDiffOverlay from '@/components/graph/GraphDiffOverlay';
 import RadialExplorePage from '@/pages/RadialExplorePage';
 import { useGraphData } from '@/components/graph/use-graph-data';
 import type { LayoutName } from '@/components/graph/graph-layouts';
@@ -63,6 +65,7 @@ export default function ExplorePage({ onBack }: ExplorePageProps) {
   const [demoAnswer, setDemoAnswer] = useState<string | null>(null);
   const [resetLoading, setResetLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showStats, setShowStats] = useState(false);
   const cyRef = useRef<cytoscape.Core | null>(null);
 
   const handleZoomIn = useCallback(() => {
@@ -130,6 +133,29 @@ export default function ExplorePage({ onBack }: ExplorePageProps) {
     setHighlightNodeIds(new Set());
     setDemoAnswer(null);
   }, [setHighlightNodeIds]);
+
+  const handleExportPNG = useCallback(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    const png = cy.png({ output: 'blob', bg: '#ffffff', scale: 2, full: true });
+    const url = URL.createObjectURL(png);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `graphrag-${new Date().toISOString().slice(0, 10)}.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const handleExportJSON = useCallback(() => {
+    const data = { nodes: rawNodes, edges: rawEdges, exported_at: new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `graphrag-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [rawNodes, rawEdges]);
 
   const handleReset = useCallback(async () => {
     if (!window.confirm(`그래프를 초기화하시겠습니까? ${totalNodes}개 노드와 ${totalEdges}개 엣지가 삭제됩니다.`)) return;
@@ -236,6 +262,8 @@ export default function ExplorePage({ onBack }: ExplorePageProps) {
                 demoQueryLoading={demoQueryLoading}
                 onReset={handleReset}
                 resetLoading={resetLoading}
+                onExportPNG={handleExportPNG}
+                onExportJSON={handleExportJSON}
               />
             </div>
           </div>
@@ -293,6 +321,20 @@ export default function ExplorePage({ onBack }: ExplorePageProps) {
                   cyRef={cyRef}
                 />
               </div>
+              {/* KG Stats dashboard overlay */}
+              {stats && (
+                <KGStatsDashboard
+                  stats={stats}
+                  visible={showStats}
+                  onToggle={() => setShowStats((v) => !v)}
+                />
+              )}
+              {/* Schema diff overlay */}
+              <GraphDiffOverlay
+                rawNodes={rawNodes}
+                rawEdges={rawEdges}
+                onHighlight={setHighlightNodeIds}
+              />
             </div>
 
             {/* Right: Detail panel — overlay on mobile */}

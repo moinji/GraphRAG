@@ -8,8 +8,9 @@ from __future__ import annotations
 import logging
 import re
 import time
-from collections import OrderedDict
 
+from app.cache import cache, hash_question, make_key
+from app.circuit_breaker import neo4j_breaker
 from app.db.neo4j_client import get_driver
 from app.exceptions import CypherExecutionError
 from app.models.schemas import QueryResponse
@@ -21,35 +22,50 @@ logger = logging.getLogger(__name__)
 
 _HANGUL_RE = re.compile(r"[\uac00-\ud7a3]")
 
-# ── LRU cache for Mode A deterministic queries ──────────────────
-_QUERY_CACHE_MAX = 128
-_query_cache: OrderedDict[tuple[str, str | None], QueryResponse] = OrderedDict()
+
+def _log_response(tenant_id: str | None, resp: QueryResponse) -> None:
+    """Best-effort query history logging to PG."""
+    try:
+        from app.db.query_log import log_query
+
+        log_query(
+            tenant_id=tenant_id,
+            question=resp.question,
+            mode=resp.mode,
+            answer=resp.answer[:500] if resp.answer else None,
+            template_id=resp.template_id or None,
+            route=resp.route or None,
+            matched_by=resp.matched_by or None,
+            cached=resp.cached,
+            latency_ms=resp.latency_ms,
+            error=resp.error,
+        )
+    except Exception:
+        pass
+
+# ── Query cache via unified cache layer ──────────────────────────
+_QUERY_CACHE_TTL = 300  # 5 minutes
 
 
 def _cache_get(question: str, tenant_id: str | None) -> QueryResponse | None:
-    key = (question, tenant_id)
-    if key in _query_cache:
-        _query_cache.move_to_end(key)
-        return _query_cache[key]
+    key = make_key("query", tenant_id, hash_question(question))
+    data = cache.get(key)
+    if data is not None:
+        return QueryResponse(**data)
     return None
 
 
 def _cache_put(question: str, tenant_id: str | None, response: QueryResponse) -> None:
-    key = (question, tenant_id)
-    _query_cache[key] = response
-    _query_cache.move_to_end(key)
-    while len(_query_cache) > _QUERY_CACHE_MAX:
-        _query_cache.popitem(last=False)
+    key = make_key("query", tenant_id, hash_question(question))
+    cache.set(key, response.model_dump(), ttl=_QUERY_CACHE_TTL)
 
 
 def invalidate_query_cache(tenant_id: str | None = None) -> None:
     """Clear query cache — call after KG rebuild."""
     if tenant_id is None:
-        _query_cache.clear()
+        cache.delete_prefix("graphrag:query:")
     else:
-        to_remove = [k for k in _query_cache if k[1] == tenant_id]
-        for k in to_remove:
-            del _query_cache[k]
+        cache.delete_prefix(f"graphrag:query:{tenant_id}:")
 
 
 def _is_korean(text: str) -> bool:
@@ -122,7 +138,43 @@ def run_query_stream(
 
     # 2-6: Slot fill → Cypher → Neo4j → paths → answer → node IDs
     cypher, neo4j_params = fill_template(template_id, slots, params)
-    records = _execute_cypher(cypher, neo4j_params)
+
+    try:
+        records = _execute_cypher(cypher, neo4j_params)
+    except CypherExecutionError:
+        # Graceful degradation for streaming
+        stale = _cache_get(question, tenant_id)
+        if stale is not None:
+            stale.degraded = True
+            stale.cached = True
+            stale.latency_ms = int((time.time() - start_time) * 1000)
+            yield {"_event": "complete", **stale.model_dump()}
+            return
+        latency_ms = int((time.time() - start_time) * 1000)
+        ko = _is_korean(question)
+        degraded_msg = (
+            "데이터베이스에 일시적으로 연결할 수 없습니다. 잠시 후 다시 시도해 주세요."
+            if ko
+            else "Database temporarily unavailable. Please try again shortly."
+        )
+        yield {
+            "_event": "complete",
+            **QueryResponse(
+                question=question,
+                answer=degraded_msg,
+                cypher=cypher,
+                paths=[],
+                template_id=template_id,
+                route=route,
+                matched_by=matched_by,
+                error="neo4j_unavailable",
+                mode="a",
+                latency_ms=latency_ms,
+                degraded=True,
+            ).model_dump(),
+        }
+        return
+
     paths = _extract_paths(records, template_id, slots, params)
     answer = _generate_answer(question, records, template_id, slots, params)
     related_node_ids = _extract_related_node_ids(records, template_id, slots, params)
@@ -205,8 +257,40 @@ def run_query(
     # 2. Slot fill → Cypher
     cypher, neo4j_params = fill_template(template_id, slots, params)
 
-    # 3. Execute against Neo4j
-    records = _execute_cypher(cypher, neo4j_params)
+    # 3. Execute against Neo4j (with graceful degradation)
+    try:
+        records = _execute_cypher(cypher, neo4j_params)
+    except CypherExecutionError:
+        # Graceful degradation: return stale cache if available
+        stale = _cache_get(question, tenant_id)
+        if stale is not None:
+            stale.degraded = True
+            stale.cached = True
+            stale.latency_ms = int((time.time() - start_time) * 1000)
+            logger.warning("Neo4j down — serving stale cache for: %s", question[:80])
+            _log_response(tenant_id, stale)
+            return stale
+        # No cache — return degraded error response
+        latency_ms = int((time.time() - start_time) * 1000)
+        ko = _is_korean(question)
+        degraded_msg = (
+            "데이터베이스에 일시적으로 연결할 수 없습니다. 잠시 후 다시 시도해 주세요."
+            if ko
+            else "Database temporarily unavailable. Please try again shortly."
+        )
+        return QueryResponse(
+            question=question,
+            answer=degraded_msg,
+            cypher=cypher,
+            paths=[],
+            template_id=template_id,
+            route=route,
+            matched_by=matched_by,
+            error="neo4j_unavailable",
+            mode="a",
+            latency_ms=latency_ms,
+            degraded=True,
+        )
 
     # 4. Extract evidence paths
     paths = _extract_paths(records, template_id, slots, params)
@@ -234,18 +318,27 @@ def run_query(
 
     # Cache successful Mode A results
     _cache_put(question, tenant_id, response)
+
+    # Log to query history (best-effort)
+    _log_response(tenant_id, response)
     return response
 
 
 def _execute_cypher(cypher: str, params: dict[str, object]) -> list[dict]:
-    """Run Cypher against Neo4j and return list of record dicts."""
+    """Run Cypher against Neo4j with circuit breaker protection."""
+    if not neo4j_breaker.allow_request():
+        raise CypherExecutionError(
+            "Neo4j circuit breaker is OPEN — service temporarily unavailable"
+        )
     try:
         driver = get_driver()
         with driver.session() as session:
             result = session.run(cypher, **params)
             records = [dict(r) for r in result]
+        neo4j_breaker.record_success()
         return records
     except Exception as e:
+        neo4j_breaker.record_failure()
         raise CypherExecutionError(f"Neo4j execution failed: {e}")
 
 

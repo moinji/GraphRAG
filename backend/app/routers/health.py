@@ -69,9 +69,15 @@ def _check_llm() -> dict[str, Any]:
 
 @router.get("/health", response_model=HealthCheckResponse)
 def health_check() -> dict[str, Any]:
+    from app.circuit_breaker import neo4j_breaker, pg_breaker
+
     neo4j = _check_neo4j()
     postgres = _check_postgres()
     llm = _check_llm()
+
+    # Inject circuit breaker state into service health
+    neo4j["circuit_breaker"] = neo4j_breaker.state.value
+    postgres["circuit_breaker"] = pg_breaker.state.value
 
     core_ok = all(s["status"] == "ok" for s in [neo4j, postgres])
     return {

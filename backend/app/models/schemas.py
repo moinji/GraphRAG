@@ -233,6 +233,18 @@ class QueryRequest(BaseModel):
     mode: str = "a"  # "a" | "b" | "c"
 
 
+class BatchQueryRequest(BaseModel):
+    questions: list[QueryRequest]
+    # Max 20 questions per batch
+    max_parallel: int = 5
+
+
+class BatchQueryResponse(BaseModel):
+    results: list["QueryResponse"]
+    total: int
+    latency_ms: int
+
+
 class QueryResponse(BaseModel):
     question: str
     answer: str
@@ -247,6 +259,7 @@ class QueryResponse(BaseModel):
     llm_tokens_used: int | None = None
     latency_ms: int | None = None
     cached: bool = False
+    degraded: bool = False  # True when served from cache due to service outage
     related_node_ids: list[str] = []
     document_sources: list[DocumentSource] = []  # Mode C: document evidence
 
@@ -333,6 +346,7 @@ class ServiceHealth(BaseModel):
     status: str
     latency_ms: float | None = None
     detail: str | None = None
+    circuit_breaker: str | None = None
 
 
 class HealthCheckResponse(BaseModel):
