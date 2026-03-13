@@ -90,3 +90,93 @@ class TestEmbedSingle:
 
         dim = get_embedding_dimension()
         assert len(result) == dim
+
+
+# ── Dimension detection tests ─────────────────────────────────────
+
+
+class TestDimensionDetection:
+    @patch("app.document.embedder.settings")
+    @patch("app.document.embedder._openai_available", return_value=True)
+    def test_openai_small_dimension(self, _mock_avail, mock_settings):
+        mock_settings.openai_api_key = "test-key"
+        mock_settings.embedding_model = "text-embedding-3-small"
+        assert get_embedding_dimension() == 1536
+
+    @patch("app.document.embedder.settings")
+    @patch("app.document.embedder._openai_available", return_value=True)
+    def test_openai_large_dimension(self, _mock_avail, mock_settings):
+        mock_settings.openai_api_key = "test-key"
+        mock_settings.embedding_model = "text-embedding-3-large"
+        assert get_embedding_dimension() == 3072
+
+    @patch("app.document.embedder.settings")
+    @patch("app.document.embedder._openai_available", return_value=False)
+    def test_openai_unavailable_falls_to_local(self, _mock_avail, mock_settings):
+        mock_settings.openai_api_key = "test-key"
+        mock_settings.local_embedding_model = "all-MiniLM-L6-v2"
+        assert get_embedding_dimension() == 384
+
+    @patch("app.document.embedder.settings")
+    def test_no_key_uses_local(self, mock_settings):
+        mock_settings.openai_api_key = None
+        mock_settings.local_embedding_model = "all-mpnet-base-v2"
+        assert get_embedding_dimension() == 768
+
+    @patch("app.document.embedder.settings")
+    def test_unknown_local_model_defaults_384(self, mock_settings):
+        mock_settings.openai_api_key = None
+        mock_settings.local_embedding_model = "unknown-model-xyz"
+        assert get_embedding_dimension() == 384
+
+
+class TestOpenAIAvailability:
+    def test_cache_reset(self):
+        """_openai_ok cache can be reset."""
+        import app.document.embedder as emb
+        original = emb._openai_ok
+        emb._openai_ok = None  # reset
+        try:
+            with patch("app.document.embedder.settings") as mock_s:
+                mock_s.openai_api_key = "fake"
+                # Should fail and cache False
+                result = emb._openai_available()
+                assert result is False
+                assert emb._openai_ok is False
+        finally:
+            emb._openai_ok = original
+
+    def test_cached_result_reused(self):
+        """Once cached, _openai_available returns cached value without API call."""
+        import app.document.embedder as emb
+        original = emb._openai_ok
+        emb._openai_ok = True
+        try:
+            assert emb._openai_available() is True
+        finally:
+            emb._openai_ok = original
+
+
+class TestLocalEmbedFallback:
+    @patch("app.document.embedder.settings")
+    def test_local_model_called_on_no_key(self, mock_settings):
+        mock_settings.openai_api_key = None
+        fake_vectors = [[0.5] * 384]
+
+        with patch("app.document.embedder._embed_local", return_value=fake_vectors) as mock_local:
+            result = embed_texts(["test text"])
+
+        assert result == fake_vectors
+        mock_local.assert_called_once()
+
+    @patch("app.document.embedder.settings")
+    def test_zero_vectors_have_correct_dim(self, mock_settings):
+        mock_settings.openai_api_key = None
+        mock_settings.local_embedding_model = "all-MiniLM-L6-v2"
+
+        with patch("app.document.embedder._embed_local", side_effect=Exception("fail")):
+            result = embed_texts(["hello", "world"])
+
+        assert len(result) == 2
+        assert len(result[0]) == 384  # local model dim
+        assert len(result[1]) == 384

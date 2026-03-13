@@ -797,3 +797,52 @@ def test_synonym_customer_variation():
     from app.query.router_rules import _normalize_synonyms
     normalized = _normalize_synonyms("소비자가 주문한 상품")
     assert "고객" in normalized
+
+
+# ── Domain synonym tests ──────────────────────────────────────────
+
+
+def test_synonym_education_student():
+    """#S7: '수강생' → '학생' 정규화 (교육 도메인)."""
+    from app.query.router_rules import _normalize_synonyms
+    assert "학생" in _normalize_synonyms("수강생 목록을 보여줘")
+
+
+def test_synonym_education_course():
+    """#S8: '강좌' → '과목' 정규화 (교육 도메인)."""
+    from app.query.router_rules import _normalize_synonyms
+    assert "과목" in _normalize_synonyms("어떤 강좌가 있나요?")
+
+
+def test_synonym_hospital_patient():
+    """#S9: '수진자' → '환자' 정규화 (의료 도메인)."""
+    from app.query.router_rules import _normalize_synonyms
+    assert "환자" in _normalize_synonyms("수진자 정보를 조회해줘")
+
+
+def test_synonym_insurance_claim():
+    """#S10: '클레임' → '청구' 정규화 (보험 도메인)."""
+    from app.query.router_rules import _normalize_synonyms
+    assert "청구" in _normalize_synonyms("클레임 현황을 보여줘")
+
+
+def test_synonym_hr_employee():
+    """#S11: '사원' → '직원' 정규화 (HR 도메인)."""
+    from app.query.router_rules import _normalize_synonyms
+    assert "직원" in _normalize_synonyms("사원 목록")
+
+
+def test_synonym_domain_english_instructor():
+    """#S12: 'professor' → 'instructor' 정규화 (교육 영문)."""
+    from app.query.router_rules import _normalize_synonyms
+    assert "instructor" in _normalize_synonyms("Who is the professor?")
+
+
+def test_synonym_load_domain_idempotent():
+    """#S13: load_domain_synonyms is idempotent."""
+    from app.query.router_rules import _SYNONYM_MAP, load_domain_synonyms
+    before = len(_SYNONYM_MAP.get("학생", []))
+    load_domain_synonyms("education")
+    load_domain_synonyms("education")
+    after = len(_SYNONYM_MAP.get("학생", []))
+    assert before == after  # no duplicates

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { uploadDocuments, listDocuments, deleteDocument } from '@/api/client';
@@ -14,15 +15,13 @@ const ACCEPTED_TYPES = '.pdf,.docx,.md,.markdown,.html,.htm,.txt';
 export default function DocumentsPage({ onBack, onGoToQuery }: DocumentsPageProps) {
   const [documents, setDocuments] = useState<DocumentInfo[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [errors, setErrors] = useState<string[]>([]);
-  const [successMsg, setSuccessMsg] = useState('');
   const [polling, setPolling] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
 
   const refreshDocs = useCallback(async () => {
     try {
       const res = await listDocuments();
       setDocuments(res.documents);
-      // Continue polling if any doc is still processing
       const hasProcessing = res.documents.some((d) => d.status === 'processing');
       setPolling(hasProcessing);
     } catch {
@@ -34,7 +33,6 @@ export default function DocumentsPage({ onBack, onGoToQuery }: DocumentsPageProp
     refreshDocs();
   }, [refreshDocs]);
 
-  // Poll while documents are processing
   useEffect(() => {
     if (!polling) return;
     const interval = setInterval(refreshDocs, 3000);
@@ -46,25 +44,20 @@ export default function DocumentsPage({ onBack, onGoToQuery }: DocumentsPageProp
     if (!files || files.length === 0) return;
 
     setUploading(true);
-    setErrors([]);
-    setSuccessMsg('');
-
     try {
       const res = await uploadDocuments(Array.from(files));
       if (res.errors.length > 0) {
-        setErrors(res.errors);
+        res.errors.forEach((err) => toast.error(err));
       }
       if (res.total_queued > 0) {
-        setSuccessMsg(`${res.total_queued}개 파일 처리 시작`);
+        toast.success(`${res.total_queued}개 파일 처리 시작`);
         setPolling(true);
-        // Refresh after short delay to catch new docs
         setTimeout(refreshDocs, 1000);
       }
     } catch (err) {
-      setErrors([err instanceof Error ? err.message : 'Upload failed']);
+      toast.error(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setUploading(false);
-      // Reset file input
       e.target.value = '';
     }
   }
@@ -73,12 +66,15 @@ export default function DocumentsPage({ onBack, onGoToQuery }: DocumentsPageProp
     try {
       await deleteDocument(docId);
       setDocuments((prev) => prev.filter((d) => d.document_id !== docId));
+      setDeleteConfirm(null);
+      toast.success('문서가 삭제되었습니다');
     } catch (err) {
-      setErrors([err instanceof Error ? err.message : 'Delete failed']);
+      toast.error(err instanceof Error ? err.message : 'Delete failed');
     }
   }
 
   const readyCount = documents.filter((d) => d.status === 'ready').length;
+  const totalChunks = documents.reduce((sum, d) => sum + d.chunk_count, 0);
 
   return (
     <div className="space-y-6">
@@ -102,8 +98,16 @@ export default function DocumentsPage({ onBack, onGoToQuery }: DocumentsPageProp
 
       {/* Upload section */}
       <div className="rounded-lg border border-dashed p-6 text-center">
-        <p className="text-sm text-muted-foreground mb-3">
+        <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+          <svg className="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+          </svg>
+        </div>
+        <p className="text-sm text-muted-foreground mb-1">
           PDF, DOCX, Markdown, HTML, TXT 파일을 업로드하세요
+        </p>
+        <p className="text-xs text-muted-foreground/60 mb-3">
+          드래그 앤 드롭 또는 클릭하여 선택
         </p>
         <label className="inline-block cursor-pointer">
           <input
@@ -130,25 +134,19 @@ export default function DocumentsPage({ onBack, onGoToQuery }: DocumentsPageProp
         </label>
       </div>
 
-      {/* Messages */}
-      {successMsg && (
-        <div role="status" aria-live="polite" className="rounded-md bg-green-50 border border-green-200 p-3 text-sm text-green-800">
-          {successMsg}
-        </div>
-      )}
-      {errors.length > 0 && (
-        <div role="alert" className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive space-y-1">
-          {errors.map((err, i) => (
-            <p key={i}>{err}</p>
-          ))}
-        </div>
-      )}
-
       {/* Document list */}
       {documents.length === 0 ? (
-        <p className="text-center text-muted-foreground py-8">
-          업로드된 문서가 없습니다
-        </p>
+        <div className="text-center py-12 space-y-3">
+          <div className="mx-auto w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+            <svg className="w-8 h-8 text-muted-foreground/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <p className="text-muted-foreground font-medium">업로드된 문서가 없습니다</p>
+          <p className="text-xs text-muted-foreground/60">
+            문서를 업로드하면 자동으로 청킹, 임베딩 처리 후 Mode C 질의에 활용됩니다
+          </p>
+        </div>
       ) : (
         <div className="rounded-lg border overflow-hidden">
           <table className="w-full text-sm" aria-label="문서 목록">
@@ -181,13 +179,30 @@ export default function DocumentsPage({ onBack, onGoToQuery }: DocumentsPageProp
                     <StatusBadge status={doc.status} />
                   </td>
                   <td className="px-4 py-2 text-right">
-                    <button
-                      onClick={() => handleDelete(doc.document_id)}
-                      aria-label={`${doc.filename} 삭제`}
-                      className="text-xs text-destructive hover:text-destructive/80"
-                    >
-                      삭제
-                    </button>
+                    {deleteConfirm === doc.document_id ? (
+                      <span className="inline-flex gap-1">
+                        <button
+                          onClick={() => handleDelete(doc.document_id)}
+                          className="text-xs px-2 py-0.5 bg-destructive text-destructive-foreground rounded"
+                        >
+                          확인
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirm(null)}
+                          className="text-xs px-2 py-0.5 border rounded"
+                        >
+                          취소
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => setDeleteConfirm(doc.document_id)}
+                        aria-label={`${doc.filename} 삭제`}
+                        className="text-xs text-destructive hover:text-destructive/80"
+                      >
+                        삭제
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -198,10 +213,11 @@ export default function DocumentsPage({ onBack, onGoToQuery }: DocumentsPageProp
 
       {/* Summary */}
       {documents.length > 0 && (
-        <p className="text-xs text-muted-foreground text-center">
-          전체 {documents.length}개 문서 | 처리 완료 {readyCount}개 |{' '}
-          총 {documents.reduce((sum, d) => sum + d.chunk_count, 0)}개 청크
-        </p>
+        <div className="flex justify-center gap-4 text-xs text-muted-foreground">
+          <span>전체 {documents.length}개 문서</span>
+          <span>처리 완료 {readyCount}개</span>
+          <span>총 {totalChunks}개 청크</span>
+        </div>
       )}
     </div>
   );

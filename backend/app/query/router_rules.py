@@ -19,7 +19,8 @@ RouteResult = tuple[str, str, dict[str, str], dict[str, object]]
 # Maps synonyms/alternative expressions to canonical forms used in regex patterns.
 # Key = canonical form, Value = list of synonyms (applied case-insensitively).
 
-_SYNONYM_MAP: dict[str, list[str]] = {
+# Base synonyms (ecommerce domain)
+_BASE_SYNONYM_MAP: dict[str, list[str]] = {
     "주문": ["오더", "발주", "결제"],
     "구매": ["구입", "산", "샀"],
     "상품": ["제품", "물건", "아이템", "품목"],
@@ -34,6 +35,92 @@ _SYNONYM_MAP: dict[str, list[str]] = {
     "category": ["classification"],
     "coupon": ["discount code", "voucher"],
 }
+
+# Domain-specific synonym maps
+_DOMAIN_SYNONYMS: dict[str, dict[str, list[str]]] = {
+    "education": {
+        "학생": ["학습자", "수강생", "수강자"],
+        "교수": ["교원", "강사", "선생님", "교사"],
+        "과목": ["강의", "수업", "코스", "강좌"],
+        "학과": ["전공", "학부"],
+        "성적": ["학점", "점수", "평점", "GPA"],
+        "수강": ["등록", "수강신청"],
+        "student": ["learner", "pupil"],
+        "course": ["class", "subject", "lecture"],
+        "instructor": ["professor", "teacher", "lecturer"],
+        "grade": ["score", "mark", "GPA"],
+        "enrollment": ["registration"],
+    },
+    "insurance": {
+        "보험": ["보험상품", "보장"],
+        "계약자": ["보험가입자", "피보험자", "가입자"],
+        "보험료": ["프리미엄", "납입금"],
+        "청구": ["클레임", "보상청구", "보험금 청구"],
+        "보장": ["커버리지", "보상범위"],
+        "대리점": ["에이전트", "설계사", "보험설계사"],
+        "policy": ["insurance plan", "coverage plan"],
+        "claim": ["insurance claim"],
+        "premium": ["payment", "installment"],
+        "policyholder": ["insured", "subscriber"],
+    },
+    "hospital": {
+        "환자": ["수진자", "진료자"],
+        "의사": ["의료진", "주치의", "담당의"],
+        "진료": ["진찰", "치료", "시술"],
+        "처방": ["처방전", "약처방"],
+        "입원": ["재원", "병원입원"],
+        "검사": ["검진", "진단검사"],
+        "patient": ["case"],
+        "doctor": ["physician", "practitioner"],
+        "diagnosis": ["condition", "finding"],
+        "prescription": ["medication order"],
+    },
+    "accounting": {
+        "계정": ["계좌", "어카운트"],
+        "분개": ["전표", "저널"],
+        "거래처": ["벤더", "거래선"],
+        "예산": ["버짓"],
+        "회계기간": ["결산기간", "회계연도"],
+        "account": ["ledger"],
+        "journal": ["entry", "transaction"],
+        "vendor": ["supplier"],
+        "budget": ["fiscal plan"],
+    },
+    "hr": {
+        "직원": ["사원", "임직원", "종업원"],
+        "부서": ["팀", "조직"],
+        "근태": ["출결", "출퇴근"],
+        "휴가": ["연차", "휴직"],
+        "인사평가": ["성과평가", "업무평가"],
+        "employee": ["staff", "worker", "personnel"],
+        "department": ["team", "division", "unit"],
+        "attendance": ["timesheet"],
+        "leave": ["time off", "vacation", "PTO"],
+    },
+}
+
+# Active synonym map (populated at module load + extensible at runtime)
+_SYNONYM_MAP: dict[str, list[str]] = dict(_BASE_SYNONYM_MAP)
+
+
+def load_domain_synonyms(domain: str | None = None) -> None:
+    """Extend synonym map with domain-specific synonyms.
+
+    If domain is None, loads all domains. Idempotent.
+    """
+    if domain:
+        extra = _DOMAIN_SYNONYMS.get(domain, {})
+        for canonical, syns in extra.items():
+            existing = _SYNONYM_MAP.get(canonical, [])
+            merged = list(set(existing + syns))
+            _SYNONYM_MAP[canonical] = merged
+    else:
+        for d in _DOMAIN_SYNONYMS:
+            load_domain_synonyms(d)
+
+
+# Auto-load all domain synonyms at import time
+load_domain_synonyms()
 
 
 def _normalize_synonyms(text: str) -> str:
