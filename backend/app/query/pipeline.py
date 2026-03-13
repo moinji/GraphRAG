@@ -210,6 +210,12 @@ def run_query(
 
         return run_hybrid_query(question, tenant_id=tenant_id)
 
+    # D안: Text2Cypher pipeline (NL → Cypher → execute → answer)
+    if mode == "d":
+        from app.query.text2cypher import run_text2cypher_query
+
+        return run_text2cypher_query(question, tenant_id=tenant_id)
+
     # B안: local search pipeline
     if mode == "b":
         from app.query.local_search import run_local_query

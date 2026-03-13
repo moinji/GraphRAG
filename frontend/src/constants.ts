@@ -22,6 +22,14 @@ export const DEMO_QUESTIONS_C = [
   { label: 'C5', text: '애플코리아가 공급하는 제품들의 특징은?' },
 ] as const;
 
+export const DEMO_QUESTIONS_D = [
+  { label: 'D1', text: '가장 많은 주문을 한 고객과 그 주문 수는?' },
+  { label: 'D2', text: '평균 주문 금액보다 높은 주문을 한 고객들은?' },
+  { label: 'D3', text: '2개 이상의 주문에 포함된 상품은?' },
+  { label: 'D4', text: '각 카테고리별 평균 리뷰 평점은?' },
+  { label: 'D5', text: '고객→주문→상품→카테고리 경로에서 가장 인기 있는 카테고리는?' },
+] as const;
+
 export const WISDOM_DEMO_QUESTIONS = [
   { label: 'W1', text: '고객 구매 패턴에서 어떤 트렌드가 보이나요?' },
   { label: 'W2', text: '리뷰 평점이 높은 상품이 실제로 더 많이 팔리나요?' },

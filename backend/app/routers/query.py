@@ -31,7 +31,7 @@ def query(req: QueryRequest, request: Request) -> QueryResponse:
     question = req.question.strip()
     if not question:
         raise QueryRoutingError("Question cannot be empty")
-    mode = req.mode if req.mode in ("a", "b", "c") else "a"
+    mode = req.mode if req.mode in ("a", "b", "c", "d") else "a"
     return run_query(question, mode=mode, tenant_id=tenant_id)
 
 
@@ -54,7 +54,7 @@ def batch_query(req: BatchQueryRequest, request: Request) -> BatchQueryResponse:
             return idx, QueryResponse(
                 question="", answer="", cypher="", error="Empty question",
             )
-        mode = q.mode if q.mode in ("a", "b", "c") else "a"
+        mode = q.mode if q.mode in ("a", "b", "c", "d") else "a"
         try:
             return idx, run_query(question, mode=mode, tenant_id=tenant_id)
         except Exception as e:

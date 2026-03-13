@@ -262,6 +262,20 @@ async def owl_reasoning_error_handler(
 # ── Schema Evolution ────────────────────────────────────────────────────
 
 
+class Text2CypherError(Exception):
+    """Raised when Text2Cypher pipeline fails."""
+
+    def __init__(self, detail: str = "Text2Cypher generation failed"):
+        self.detail = detail
+        super().__init__(detail)
+
+
+async def text2cypher_error_handler(
+    _request: Request, exc: Text2CypherError
+) -> JSONResponse:
+    return JSONResponse(status_code=502, content={"detail": exc.detail})
+
+
 class MigrationNotFoundError(Exception):
     """Raised when a migration job is not found."""
 

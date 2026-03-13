@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     wisdom_model: str = "gpt-4o"
     wisdom_max_tokens: int = 4096
 
+    # Text2Cypher (Mode D)
+    text2cypher_model: str = "gpt-4o"
+    text2cypher_max_tokens: int = 2048
+
     # CSV Import
     csv_max_file_size_mb: int = 50
     csv_max_files: int = 50

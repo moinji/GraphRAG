@@ -35,6 +35,7 @@ from app.exceptions import (
     OWLReasoningError,
     OntologyGenerationError,
     QueryRoutingError,
+    Text2CypherError,
     VersionConflictError,
     VersionNotFoundError,
     WisdomError,
@@ -54,6 +55,7 @@ from app.exceptions import (
     owl_reasoning_error_handler,
     ontology_generation_error_handler,
     query_routing_error_handler,
+    text2cypher_error_handler,
     version_conflict_handler,
     version_not_found_handler,
     wisdom_error_handler,
@@ -127,6 +129,7 @@ def create_app() -> FastAPI:
     application.add_exception_handler(OWLReasoningError, owl_reasoning_error_handler)
     application.add_exception_handler(MigrationNotFoundError, migration_not_found_handler)
     application.add_exception_handler(MigrationError, migration_error_handler)
+    application.add_exception_handler(Text2CypherError, text2cypher_error_handler)
 
     # Routers
     application.include_router(health.router)

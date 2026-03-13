@@ -3,11 +3,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { sendQuery, sendWisdomQuery } from '@/api/client';
 import { streamQuery } from '@/api/sse';
-import { DEMO_QUESTIONS, DEMO_QUESTIONS_EN, DEMO_QUESTIONS_C, WISDOM_DEMO_QUESTIONS, SSE_STREAM_TIMEOUT_MS } from '@/constants';
+import { DEMO_QUESTIONS, DEMO_QUESTIONS_EN, DEMO_QUESTIONS_C, DEMO_QUESTIONS_D, WISDOM_DEMO_QUESTIONS, SSE_STREAM_TIMEOUT_MS } from '@/constants';
 import DIKWTimeline from '@/components/wisdom/DIKWTimeline';
 import type { ChatMessage, QueryResponse } from '@/types/ontology';
 
-type Mode = 'a' | 'b' | 'c' | 'w';
+type Mode = 'a' | 'b' | 'c' | 'd' | 'w';
 
 let _msgSeq = 0;
 function msgId(): string {
@@ -52,9 +52,9 @@ export default function QueryPage({ onBack }: QueryPageProps) {
     setSending(true);
 
     try {
-      if (mode === 'c') {
-        // Mode C: hybrid search (vector + KG)
-        const data = await sendQuery(question, 'c');
+      if (mode === 'c' || mode === 'd') {
+        // Mode C: hybrid search, Mode D: Text2Cypher — both sync
+        const data = await sendQuery(question, mode);
         const assistantMsg: ChatMessage = {
           id: msgId(), role: 'assistant',
           content: data.answer,
@@ -150,8 +150,8 @@ export default function QueryPage({ onBack }: QueryPageProps) {
     return () => { abortRef.current?.abort(); };
   }, []);
 
-  const demoQuestions = mode === 'w' ? WISDOM_DEMO_QUESTIONS : mode === 'c' ? DEMO_QUESTIONS_C : DEMO_QUESTIONS;
-  const demoQuestionsEn = (mode === 'w' || mode === 'c') ? null : DEMO_QUESTIONS_EN;
+  const demoQuestions = mode === 'w' ? WISDOM_DEMO_QUESTIONS : mode === 'c' ? DEMO_QUESTIONS_C : mode === 'd' ? DEMO_QUESTIONS_D : DEMO_QUESTIONS;
+  const demoQuestionsEn = (mode === 'w' || mode === 'c' || mode === 'd') ? null : DEMO_QUESTIONS_EN;
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
@@ -198,6 +198,18 @@ export default function QueryPage({ onBack }: QueryPageProps) {
               }`}
             >
               C 하이브리드
+            </button>
+            <button
+              onClick={() => setMode('d')}
+              role="radio"
+              aria-checked={mode === 'd'}
+              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                mode === 'd'
+                  ? 'bg-emerald-600 text-white'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              D Cypher
             </button>
             <button
               onClick={() => setMode('w')}
@@ -362,14 +374,16 @@ function AssistantDetail({ data }: { data: QueryResponse }) {
         <Badge
           variant="outline"
           className={`text-xs ${
-            data.mode === 'c'
+            data.mode === 'd'
+              ? 'border-emerald-500 text-emerald-600'
+              : data.mode === 'c'
               ? 'border-purple-500 text-purple-600'
               : data.mode === 'b'
               ? 'border-orange-500 text-orange-600'
               : 'border-blue-500 text-blue-600'
           }`}
         >
-          {data.mode === 'c' ? 'C 하이브리드' : data.mode === 'b' ? 'B 로컬' : 'A 템플릿'}
+          {data.mode === 'd' ? 'D Cypher' : data.mode === 'c' ? 'C 하이브리드' : data.mode === 'b' ? 'B 로컬' : 'A 템플릿'}
         </Badge>
         {data.template_id && (
           <Badge variant="secondary" className="text-xs">
